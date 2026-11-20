@@ -1408,23 +1408,16 @@ class _SkeletonSwitcherState extends State<SkeletonSwitcher>
     final wait = widget.waitForCovers;
     final entrance = widget.entrance;
     final launching = entrance != null && !entrance.revealStarted;
-    // 開 App 第一次換場前：骨架剛長完、還沒排好呼吸時，等長完那一格畫完
-    // 就在底下一次建好內容、等封面、拍好兩張定格畫面（ADR 0035）；來不及
-    // 的話等骨架收住呼吸，畫面靜止了才做（ADR 0031）。呼吸的每一格底下都
-    // 不做事：拆成一格一小步時，手機稍慢一點，每一步都讓呼吸那一格晚
-    // 出來，一路頓頓地走過去。
-    if (launching && !entrance.breathSettled && !entrance.preparing) {
-      final resting = _resting =
-          entrance.requestPreparation() ?? entrance.settleBreath();
-      unawaited(
-        resting.then((_) {
-          if (!mounted || !identical(_resting, resting)) return;
-          setState(() => _resting = null);
-          if (!widget.loading) _onLoaded();
-        }),
-      );
-      return;
-    }
+    // 淡換進場：resources.revealStarted 在 entrance.startFade() 內同步設定，
+    // 這裡還沒看到它變 true，是 startFade() 還沒輪到執行（prepared()
+    // 剛 resolve、還差一幀＋清記憶體）。這個空檔什麼都不做：舊的「長完才
+    // 準備、收住呼吸才換場」流程（requestPreparation／settleBreath）是
+    // 配合骨架長出＋兩張定格圖換場設計的，淡換不會用到，呼叫下去反而會
+    // 卡在跟呼吸時鐘有關、時間不定的等待（曾在手機上量到卡住約 2 秒）。
+    // startFade() 的淡入播完時，entrance.skeleton 的狀態監聽
+    // （_onEntranceStatus）會重新呼叫一次 _onLoaded，這時 launching 已經
+    // 是 false，才真的往下走。
+    if (launching) return;
     if (wait != null && !(entrance?.fading ?? false)) {
       final reveal = _reveal = CoverReveal(wait, paced: !launching);
       // 淡回骨架途中又載入完成時，新內容也要從全透明開始等。建畫面途中歸零
@@ -1454,15 +1447,11 @@ class _SkeletonSwitcherState extends State<SkeletonSwitcher>
     // 之後重新載入照常兩層換場。
     final entrance = widget.entrance;
     if (entrance == null || entrance.revealStarted) {
-      // 淡換進場（entrance.fading）：準備工作做完後書架資料已到，骨架不必
-      // 佔位，直接換成內容；頁首與分頁列同格到位。
-      // entrance 為 null（非進場）或重新載入（非 fading）：照常淡換。
-      if (entrance?.fading ?? false) {
-        entrance!.revealChrome();
-        _controller.value = 1;
-      } else {
-        _controller.forward();
-      }
+      // 頁首與分頁列同格到位；骨架換成內容照 _controller 的時長淡換
+      // （entrance.fading 時是 _prepare 設的 LaunchEntranceMotion.fade，
+      // 其他情況照主題），不是瞬間跳過去。
+      entrance?.revealChrome();
+      _controller.forward();
       return;
     }
     // 拍下骨架畫面後內容一下就換好（這時螢幕上蓋著骨架那張圖），換場由兩張
