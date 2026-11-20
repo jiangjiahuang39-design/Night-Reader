@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 import 'package:night_reader/core/constant/prefer_key.dart';
 import 'package:night_reader/core/engine/reader/chinese_text_converter.dart';
@@ -17,8 +19,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// （0：不轉換、1：簡轉繁、2：繁轉簡），由 ReaderV2SettingsController
 /// 在載入與變更時同步；App 啟動時由 [start] 讀出。
 abstract final class ChineseDisplay {
-  /// 沒設定過時的模式：簡轉繁（維護者自己讀書用的設定，2026-11-06）。
-  static const int defaultMode = 1;
+  /// 沒設定過時的模式：不轉換。字典只在要轉換時才載入（[ensureLoaded]），
+  /// 預設不轉換的使用者開 App 與開書都不付字典的讀檔與解析。
+  static const int defaultMode = 0;
 
   static final ChineseDisplayMode mode = ChineseDisplayMode();
   static const ChineseTextConverter _converter = ChineseTextConverter();
@@ -44,17 +47,50 @@ abstract final class ChineseDisplay {
 
   static Future<void> _start(SharedPreferences prefs) async {
     mode.value = prefs.getInt(PreferKey.readerChineseConvert) ?? defaultMode;
+    // 模式之後改成要轉換時（閱讀設定、同步），這裡接著載字典。
+    mode.removeListener(_onModeChanged);
+    mode.addListener(_onModeChanged);
+    // 書的資訊不轉換、介面也是繁體時，已顯示的文字不受字典影響：不載字典，
+    // 也不必重建。
+    if (mode.value == 0 &&
+        !languagePrefIsSimplified(prefs.getString(PreferKey.language))) {
+      return;
+    }
     try {
       await ChineseUtils.initialize();
     } catch (e, stack) {
       AppLog.e('ChineseUtils load error: $e', error: e, stackTrace: stack);
       _dictionaryFailed = true;
     }
-    // 書的資訊不轉換、介面也是繁體時，已顯示的文字不受字典影響，不必重建。
-    if (mode.value != 0 ||
-        languagePrefIsSimplified(prefs.getString(PreferKey.language))) {
-      mode.refresh();
+    mode.refresh();
+  }
+
+  static void _onModeChanged() {
+    if (mode.value != 0) unawaited(ensureLoaded());
+  }
+
+  /// 字典還沒載入時在背景載入，載好後讓顯示轉換後文字的地方重建一次。
+  /// 已載入、載入中或這一輪已經失敗時不重複做（失敗後每次重建都重試的話
+  /// 會一直重建）。轉換模式改成要轉換、介面換成簡體時呼叫。
+  static Future<void> ensureLoaded() {
+    if (ChineseUtils.isInitialized || _dictionaryFailed) {
+      return Future<void>.value();
     }
+    return _ensuring ??= _ensure();
+  }
+
+  static Future<void>? _ensuring;
+
+  static Future<void> _ensure() async {
+    try {
+      await ChineseUtils.initialize();
+    } catch (e, stack) {
+      AppLog.e('ChineseUtils load error: $e', error: e, stackTrace: stack);
+      _dictionaryFailed = true;
+    } finally {
+      _ensuring = null;
+    }
+    mode.refresh();
   }
 
   /// 目前的模式下，書籍資訊能不能照轉換後的樣子顯示：不轉換、字典已載入，
