@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 import 'package:night_reader/core/chinese/chinese_utils.dart';
 import 'package:night_reader/core/chinese/chinese_display.dart';
@@ -127,7 +129,13 @@ abstract final class UiLanguageText {
       text == null ? null : convert(context, text);
 
   static String toSimplified(String text) {
-    if (text.isEmpty || !ChineseUtils.isInitialized) return text;
+    if (text.isEmpty) return text;
+    if (!ChineseUtils.isInitialized) {
+      // 字典按需載入：介面在執行中換成簡體時這裡第一次用到。載好後
+      // ChineseDisplay 通知重建，這次先顯示原文。
+      unawaited(ChineseDisplay.ensureLoaded());
+      return text;
+    }
     final cached = _simplified.remove(text);
     if (cached != null) return _simplified[text] = cached;
     final converted = ChineseUtils.t2s(text);
