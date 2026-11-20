@@ -81,7 +81,9 @@ class LaunchEntranceMotion {
   bool _revealStarted = false;
 
   /// 開 App 書架由骨架淡換成內容的時長；方式是整頁淡入淡出，不由左而右。
-  static const Duration fade = AppMotion.fade;
+  /// 比一般的 [AppMotion.fade]（0.25 秒）長，淡入與交叉淡換這兩段都看得
+  /// 清楚，不會太倉促（使用者 2026-11-20 定的）。
+  static const Duration fade = Duration(milliseconds: 400);
 
   /// 淡換的方式與時長（[SkeletonSwitcher] 在 [fading] 時用它，不用主題的
   /// [SkeletonReveal]，其他畫面的骨架換場不受影響）。
