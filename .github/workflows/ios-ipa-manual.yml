@@ -36,12 +36,12 @@ jobs:
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/ipa/Payload"
           cp -R build/ios/iphoneos/Runner.app "$RUNNER_TEMP/ipa/Payload/"
-          (cd "$RUNNER_TEMP/ipa" && zip -qry night-reader-unsigned.ipa Payload)
-          test -s "$RUNNER_TEMP/ipa/night-reader-unsigned.ipa"
+          (cd "$RUNNER_TEMP/ipa" && zip -qry "night-reader-unsigned-${{ github.run_number }}.ipa" Payload)
+          test -s "$RUNNER_TEMP/ipa/night-reader-unsigned-${{ github.run_number }}.ipa"
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v7
         with:
-          name: night-reader-ios-unsigned
-          path: ${{ runner.temp }}/ipa/night-reader-unsigned.ipa
+          name: night-reader-ios-unsigned-${{ github.run_number }}
+          path: ${{ runner.temp }}/ipa/night-reader-unsigned-${{ github.run_number }}.ipa
           retention-days: 7
