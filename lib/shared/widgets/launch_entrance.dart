@@ -76,9 +76,55 @@ class LaunchEntranceMotion {
   ValueListenable<bool> get revealed => _revealed;
   final ValueNotifier<bool> _revealed = ValueNotifier(false);
 
-  /// 書架第一次換成內容已經開始（[reveal] 或 [revealNow]）。
+  /// 書架第一次換成內容已經開始（[reveal]、[revealNow] 或 [startFade]）。
   bool get revealStarted => _revealStarted;
   bool _revealStarted = false;
+
+  /// 開 App 書架由骨架淡換成內容的時長；方式是整頁淡入淡出，不由左而右。
+  static const Duration fade = AppMotion.fade;
+
+  /// 淡換的方式與時長（[SkeletonSwitcher] 在 [fading] 時用它，不用主題的
+  /// [SkeletonReveal]，其他畫面的骨架換場不受影響）。
+  static const SkeletonReveal fadeReveal = SkeletonReveal(
+    style: SkeletonRevealStyle.fade,
+    duration: fade,
+  );
+
+  /// 淡換進行中：[startFade] 到 [finishFade]。
+  bool get fading => _fading;
+  bool _fading = false;
+
+  /// 準備工作做完：不長出骨架、不呼吸、不拍兩張定格畫面，頁首與分頁列直接
+  /// 換成真的，書架照 [fadeReveal] 由骨架淡換成內容。[_revealStarted] 先設
+  /// 好，[SkeletonSwitcher] 才走一般的兩層換場、不走定格換場；進場到
+  /// [finishFade] 才算結束，開 App 的背景工作等淡換播完才開始。
+  void startFade() {
+    if (_revealStarted || _disposed) return;
+    _fading = true;
+    _revealStarted = true;
+    // 沒有呼吸前的準備：骨架一直停在最深（不呼吸），直接淡入、再淡換。
+    _breathScheduled = true;
+    if (!_pauseOver.isCompleted) _pauseOver.complete();
+    // 骨架淡入（頁首與分頁列的骨架跟著同一條進度）；播完 [SkeletonSwitcher]
+    // 聽到完成，書架資料已到就接著淡換成內容。
+    _controller.forward(from: 0);
+  }
+
+  /// 書架開始淡換成內容：頁首按鈕、標題與分頁列同時換成真的。玻璃不能包在
+  /// 淡入裡（取樣不到背景，ADR 0022），所以這幾塊在這一格直接換，其他部分
+  /// 由骨架換場淡換。
+  void revealChrome() {
+    if (_fading && !_disposed) _revealed.value = true;
+  }
+
+  /// 書架淡換播完（[SkeletonSwitcher] 通知）：整段進場結束。
+  void finishFade() {
+    if (!_fading) return;
+    _fading = false;
+    // 放開還停在最深的骨架（例如之後書架重新載入又長出骨架）。
+    if (!_disposed) _breathing.value = true;
+    _finish();
+  }
 
   /// 開 App 的骨架呼吸由深到淺一次的時間；一口氣是它的兩倍（0.6 秒）。和
   /// 長出對稱：長出時每個位置花 0.3 秒長好、右邊晚 0.3 秒，呼吸也是每個
@@ -297,13 +343,10 @@ class _LaunchEntranceState extends State<LaunchEntrance>
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (_motion != null) return;
-    // 方式與時長在第一次建畫面時定下來，播放中改設定不影響這一次。
-    final reveal = SkeletonReveal.of(context);
-    _controller.duration = reveal.duration;
-    final motion = _motion = LaunchEntranceMotion._(
-      _controller,
-      sweep: reveal.sweeps,
-    );
+    // 開 App 的骨架出現與換成書架都是整頁淡入淡出（[LaunchEntranceMotion
+    // .fadeReveal]），不照主題的由左而右、不另設時長。
+    _controller.duration = LaunchEntranceMotion.fadeReveal.duration;
+    final motion = _motion = LaunchEntranceMotion._(_controller, sweep: false);
     // 換場最後一幀還在畫時就會完成；等這一幀畫完才開始背景工作，最後一幀
     // 不必跟著等它同步的那一段。
     unawaited(
@@ -315,41 +358,15 @@ class _LaunchEntranceState extends State<LaunchEntrance>
     );
     if (MediaQuery.disableAnimationsOf(context)) {
       _controller.value = 1;
-      // 沒有長出與呼吸，也就沒有呼吸前的準備：書架到了直接換成內容。
+      // 沒有動畫，也就沒有呼吸前的準備：書架到了直接換成內容。
       motion._breathScheduled = true;
       motion._breathing.value = true;
       motion._pauseOver.complete();
       return;
     }
-    // 骨架長完，這一格整片重建：等它畫完，書架的資料已經到了就先準備書架、
-    // 拍好兩張定格畫面（[LaunchEntranceMotion.requestPreparation]），清掉
-    // 留下的記憶體，再停 idle 才開始呼吸（長完的通知在這一格建畫面之前，從
-    // 那時就算的話，這一格越重、停得越短），開始呼吸才算停頓。
-    void onStatus(AnimationStatus status) {
-      if (!status.isCompleted) return;
-      _controller.removeStatusListener(onStatus);
-      SchedulerBinding.instance.endOfFrame.then((_) async {
-        if (!mounted) return;
-        motion._breathScheduled = true;
-        final start = motion._preparationStart;
-        if (start != null) {
-          start.complete();
-          await motion._preparationDone.future;
-          if (!mounted) return;
-          _collectGarbage();
-        }
-        _timer = Timer(LaunchEntranceMotion.idle, () {
-          motion._breathing.value = true;
-          _timer = Timer(LaunchEntranceMotion.pause, () {
-            if (!motion._pauseOver.isCompleted) motion._pauseOver.complete();
-          });
-        });
-      });
-    }
-
-    _controller.addStatusListener(onStatus);
-    // 第一幀只畫底色、和系統啟動畫面一樣；畫完、準備工作也做完，清掉開 App
-    // 留下的記憶體，再隔 idle 才開始長骨架。
+    // 淡入淡出進場：準備工作完成後不長骨架、不呼吸、不拍定格畫面，書架
+    // 直接照 [LaunchEntranceMotion.fade] 由骨架淡換成內容（見
+    // [LaunchEntranceMotion.startFade]）。
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       try {
         await widget.prepared?.call();
@@ -364,22 +381,16 @@ class _LaunchEntranceState extends State<LaunchEntrance>
           ),
         );
       }
-      // 資料回來排的那次重建：等它畫完。
+      // 資料回來排的那次重建：等它畫完，再清掉開 App 留下的記憶體。
       await SchedulerBinding.instance.endOfFrame;
       if (!mounted) return;
       _collectGarbage();
-      _timer = Timer(LaunchEntranceMotion.idle, () {
-        if (mounted) _controller.forward();
-      });
+      motion.startFade();
     });
   }
 
-  /// 長骨架前的間隔、長完到呼吸的間隔與停頓，同一時間只有一個。
-  Timer? _timer;
-
   @override
   void dispose() {
-    _timer?.cancel();
     _controller.dispose();
     _motion?._dispose();
     super.dispose();
