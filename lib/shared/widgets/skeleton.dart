@@ -1454,9 +1454,15 @@ class _SkeletonSwitcherState extends State<SkeletonSwitcher>
     // 之後重新載入照常兩層換場。
     final entrance = widget.entrance;
     if (entrance == null || entrance.revealStarted) {
-      // 開 App 淡換：頁首與分頁列和書架同一格換成真的。
-      entrance?.revealChrome();
-      _controller.forward();
+      // 淡換進場（entrance.fading）：準備工作做完後書架資料已到，骨架不必
+      // 佔位，直接換成內容；頁首與分頁列同格到位。
+      // entrance 為 null（非進場）或重新載入（非 fading）：照常淡換。
+      if (entrance?.fading ?? false) {
+        entrance!.revealChrome();
+        _controller.value = 1;
+      } else {
+        _controller.forward();
+      }
       return;
     }
     // 拍下骨架畫面後內容一下就換好（這時螢幕上蓋著骨架那張圖），換場由兩張
