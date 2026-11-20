@@ -1109,6 +1109,26 @@ class ReaderV2ContentTransformWorker {
     }
   }
 
+  /// 已經（或正在）送字典給哪一代 worker。
+  int? _dictionaryGeneration;
+  Future<void>? _dictionarySending;
+
+  /// 第一個要繁簡轉換的請求才把字典送給 worker；每一代 worker 只送一次。
+  /// 讀不到字典時照舊：轉換原樣返回。
+  Future<void> _sendDictionary(({SendPort commands, int generation}) worker) {
+    if (_dictionaryGeneration == worker.generation) {
+      return _dictionarySending ?? Future<void>.value();
+    }
+    _dictionaryGeneration = worker.generation;
+    return _dictionarySending = () async {
+      final data = await _loadDictionaryDataFromBundle();
+      if (data == null || data.length != 4) return;
+      // 讀檔時 worker 被換掉了：新的那一代自己再送。
+      if (worker.generation != _generation) return;
+      worker.commands.send(<String, Object?>{'type': 'dict', 'data': data});
+    }();
+  }
+
   /// 處理一章；[onRuleTimedOut] 收到這一章跑超過逾時、被略過的規則。
   Future<Map<String, Object?>> process(
     Map<String, Object?> args, {
@@ -1134,6 +1154,16 @@ class ReaderV2ContentTransformWorker {
     if (worker.generation != _generation) return;
     for (final MapEntry(key: id, value: request) in _pending.entries.toList()) {
       if (request.sentTo == worker.generation) continue;
+      // 要繁簡轉換的請求，字典先送到（同一個通訊埠依序送達）。
+      if ((request.args['chineseConvertType'] as int? ?? 0) != 0) {
+        await _sendDictionary(worker);
+        // 等字典時 worker 被換掉了：換掉的那一方會再送一次。請求也可能已經
+        // 被別的呼叫送出或結束。
+        if (worker.generation != _generation) return;
+        if (_pending[id] != request || request.sentTo == worker.generation) {
+          continue;
+        }
+      }
       request.sentTo = worker.generation;
       try {
         worker.commands.send(<String, Object?>{
@@ -1252,17 +1282,7 @@ class ReaderV2ContentTransformWorker {
       }
       _isolate = isolate;
       final commands = await handshake.future;
-      final dictionaryData = await _loadDictionaryDataFromBundle();
-      // 握手之後、字典載入期間 worker 就結束了。
-      if (generation != _generation) {
-        throw const ReaderV2ContentTransformException('內容轉換程序意外結束');
-      }
-      if (dictionaryData != null && dictionaryData.length == 4) {
-        commands.send(<String, Object?>{
-          'type': 'dict',
-          'data': dictionaryData,
-        });
-      }
+      // 字典不在啟動時送：不轉換繁簡的書不必讀檔、解析（[_sendDictionary]）。
       return (commands: commands, generation: generation);
     } catch (error) {
       final failure = error is ReaderV2ContentTransformException
