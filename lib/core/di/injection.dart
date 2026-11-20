@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:get_it/get_it.dart';
 import 'package:logger/logger.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -75,9 +73,8 @@ Future<void> configureDependencies() async {
   // [SourceIsolate.enabled]）；不等它開好，第一個書源工作才會等。
   SourceIsolate.start();
 
-  // 朗讀引擎現在就開始開，和讀書架、載字典同時進行。開 App 的進場在底色
-  // 時只等系統播放資訊的媒體工作階段（[SystemPlayback.ready]），不等引擎。
-  unawaited(getIt<TTSService>().init());
+  // 朗讀引擎按需啟動：第一次呼叫 TTSService.speak() 時才初始化，不在開 App
+  // 時搶佔平台執行緒。
 }
 
 /// 註冊資料庫與所有 DAO。主 isolate 與書源 isolate（連到同一個資料庫）共用。
