@@ -1333,6 +1333,8 @@ class _SkeletonSwitcherState extends State<SkeletonSwitcher>
     // 定格換場時內容一下就換好，換場播完才算出現。
     if (status.isCompleted && !widget.loading && _snapshotting == null) {
       widget.onRevealed?.call();
+      // 開 App 的淡換播完：整段進場結束。
+      widget.entrance?.finishFade();
     }
   }
 
@@ -1452,6 +1454,8 @@ class _SkeletonSwitcherState extends State<SkeletonSwitcher>
     // 之後重新載入照常兩層換場。
     final entrance = widget.entrance;
     if (entrance == null || entrance.revealStarted) {
+      // 開 App 淡換：頁首與分頁列和書架同一格換成真的。
+      entrance?.revealChrome();
       _controller.forward();
       return;
     }
@@ -1511,7 +1515,10 @@ class _SkeletonSwitcherState extends State<SkeletonSwitcher>
   /// 這一次換場照 [SkeletonReveal] 的方式與時長。換場途中反過來時沿用這一輪的方向
   /// 與方式倒著走：換掉 [_incoming] 會讓左右的濃淡在同一幀對調。
   void _prepare(SkeletonRevealSide incoming) {
-    final reveal = SkeletonReveal.of(context);
+    // 開 App 的淡換照進場自己的方式與時長；其他骨架換場照主題。
+    final reveal = widget.entrance?.fading == true
+        ? LaunchEntranceMotion.fadeReveal
+        : SkeletonReveal.of(context);
     if (!_controller.isAnimating) {
       _incoming = incoming;
       _sweep = reveal.sweeps;
