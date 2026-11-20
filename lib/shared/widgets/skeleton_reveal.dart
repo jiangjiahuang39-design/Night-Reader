@@ -32,8 +32,8 @@ class SkeletonReveal extends ThemeExtension<SkeletonReveal> {
   final SkeletonRevealStyle style;
   final Duration duration;
 
-  /// 使用者定的時長（2026-10-17），App 固定用它（ADR 0024）。
-  static const Duration defaultDuration = Duration(milliseconds: 600);
+  /// 骨架換場時長，改為 0 使骨架不叠加在其他流程上面。
+  static const Duration defaultDuration = Duration.zero;
 
   static SkeletonReveal of(BuildContext context) =>
       Theme.of(context).extension<SkeletonReveal>() ?? const SkeletonReveal();
