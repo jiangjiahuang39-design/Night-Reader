@@ -436,30 +436,9 @@ class _ReaderTextViewState extends State<ReaderTextView>
   /// 掀回舊正文）正文本來就在。
   void _revealWhenStill() {
     final reveal = SkeletonReveal.of(context);
-    final awaiting = _AwaitingReveal(buildsText: _stage is _Shown);
-    _stage = awaiting;
-    bool current() => mounted && identical(_stage, awaiting);
-    unawaited(() async {
-      await _veil.settleBreath();
-      if (!current()) return;
-      if (!awaiting.buildsText) {
-        awaiting.buildsText = true;
-        _scheduleRebuild();
-      }
-      // 排好的重建在這一幀結束時才 setState，正文在下一幀才建好、畫出：
-      // 停頓從那一幀之後才算，不讓建正文的時間吃掉它。
-      await WidgetsBinding.instance.endOfFrame;
-      if (!current()) return;
-      await WidgetsBinding.instance.endOfFrame;
-      if (!current()) return;
-      awaiting.stillGap = Timer(AppMotion.stillGap, () {
-        if (!current()) return;
-        _stage = const _Shown();
-        _veil.reveal(reveal);
-        // 掀開中的紙不攔觸控：紙上那層的攔不攔照重建時的狀態。
-        _scheduleRebuild();
-      });
-    }());
+    _stage = const _Shown();
+    _veil.reveal(reveal);
+    _scheduleRebuild();
   }
 
   /// 又要蓋紙：等著掀的那一次作廢，收住的呼吸接著走；還沒建的正文照常
