@@ -86,22 +86,11 @@ class _SliverSkeletonSwitcherState extends State<SliverSkeletonSwitcher>
     // 起內容在骨架底下一幀建一個 sliver，全部建好下一幀才開始換場：原本一幀
     // 建完整頁內容（書籍詳情在電腦 debug 模式約 50–100ms），骨架的呼吸在那
     // 一幀頓住；建內容也不和骨架變形、換場的第一段擠在同一幀（ADR 0018）。
-    _built = 0;
-    _buildNext(round);
-  }
-
-  void _buildNext(int round) {
+    _built = null;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || round != _round || widget.loading) return;
-      final built = _built;
-      if (built != null && built < (_slivers?.length ?? 0)) {
-        setState(() => _built = built + 1);
-        _buildNext(round);
-        return;
-      }
       final reveal = SkeletonReveal.of(context);
       setState(() {
-        _built = null;
         _sweep = reveal.sweeps;
       });
       _controller.duration = reveal.duration;
