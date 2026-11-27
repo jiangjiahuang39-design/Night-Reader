@@ -167,7 +167,7 @@ class _SkeletonSwitcherState extends State<SkeletonSwitcher>
       return;
     }
     if (wait != null) {
-      final reveal = _reveal = CoverReveal(wait, paced: !launching);
+      final reveal = _reveal = CoverReveal(wait, paced: false);
       // 淡回骨架途中又載入完成時，新內容也要從全透明開始等。建畫面途中歸零
       // 會在別人建構時通知聽換場進度的元件；先停住，這一幀畫完再歸零
       // （封面最快也要下一輪才等完）。
