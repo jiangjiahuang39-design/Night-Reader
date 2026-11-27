@@ -34,7 +34,7 @@ enum CoverWait {
 /// 等待結束時不通知底下的元件：各自下次重建（例如封面解碼好）時才看到
 /// 已經不在等待中，結果一樣；一起通知會讓整頁的書卡與封面擠在同一幀重建。
 class CoverReveal {
-  CoverReveal(this.wait, {this.paced = true});
+  CoverReveal(this.wait, {this.paced = false});
 
   final CoverWait wait;
 
@@ -100,6 +100,17 @@ class CoverReveal {
   /// [AppMotion.revealCoverWait]。排隊的不算在逾時裡：沒建完就換場會露出
   /// 空格。
   Future<void> settle() async {
+    if (wait == CoverWait.brief && AppMotion.revealCoverWait == Duration.zero) {
+      if (_unbuilt > 0) {
+        await SchedulerBinding.instance.endOfFrame;
+        while (_unbuilt > 0) {
+          await (_allBuilt ??= Completer<void>()).future;
+        }
+      }
+      _waiting = false;
+      _pending.clear();
+      return;
+    }
     await SchedulerBinding.instance.endOfFrame;
     // 看的是「還沒建好」而不是「還在排隊」：最後一塊放行後下一幀才建，它的
     // 封面那時才登記。這一塊建好的那一幀，封面在同一個 build 裡登記，接下
