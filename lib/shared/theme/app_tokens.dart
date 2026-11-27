@@ -229,7 +229,7 @@ class AppMotion {
   /// 換場前最多等封面解碼多久（`CoverWait.brief`：發現的書單等頁面）。等待時
   /// 骨架照常呼吸；再久就寧可讓還沒好的封面晚點各自淡入，不讓整頁卡在
   /// 骨架。開 App 的書架不設上限（ADR 0031）。
-  static const Duration revealCoverWait = Duration(milliseconds: 300);
+  static const Duration revealCoverWait = Duration.zero;
 
   /// 選單、面板滑入。
   static const Duration menu = Duration(milliseconds: 200);
@@ -262,7 +262,7 @@ class AppMotion {
 
   /// 預留停頓：主執行緒的一段重工作在靜止的畫面上做完後，隔這麼久才播下一段
   /// 動畫，動畫的每一幀都不和工作擠在一起（ADR 0036 第 2 條、ADR 0037 策略一）。
-  static const Duration stillGap = Duration(milliseconds: 100);
+  static const Duration stillGap = Duration.zero;
 }
 
 /// 以臨界阻尼附近的彈簧模擬產生的曲線；用於 [AnimationController] 等只接受
