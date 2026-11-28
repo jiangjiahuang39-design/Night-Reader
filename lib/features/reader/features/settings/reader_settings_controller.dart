@@ -103,6 +103,9 @@ class ReaderSettingsController extends ChangeNotifier {
   int pageTurnOverlap = ReaderPrefsSnapshot.defaults().pageTurnOverlap;
   ReaderPageTurnSpeed pageTurnSpeed =
       ReaderPrefsSnapshot.defaults().pageTurnSpeed;
+  bool horizontalPageTurn = ReaderPrefsSnapshot.defaults().horizontalPageTurn;
+  ReaderHorizontalPageTurnStyle horizontalPageTurnStyle =
+      ReaderPrefsSnapshot.defaults().horizontalPageTurnStyle;
   bool use24HourClock = ReaderPrefsSnapshot.defaults().use24HourClock;
   int progressFractionDigits =
       ReaderPrefsSnapshot.defaults().progressFractionDigits;
@@ -184,6 +187,8 @@ class ReaderSettingsController extends ChangeNotifier {
     hideNavigationBar = snapshot.hideNavigationBar;
     pageTurnOverlap = snapshot.pageTurnOverlap;
     pageTurnSpeed = snapshot.pageTurnSpeed;
+    horizontalPageTurn = snapshot.horizontalPageTurn;
+    horizontalPageTurnStyle = snapshot.horizontalPageTurnStyle;
     use24HourClock = snapshot.use24HourClock;
     progressFractionDigits = snapshot.progressFractionDigits;
     maxDim = snapshot.maxDim;
@@ -653,6 +658,20 @@ class ReaderSettingsController extends ChangeNotifier {
     value,
     current: pageTurnSpeed,
     put: (v) => pageTurnSpeed = v,
+  );
+
+  void setHorizontalPageTurn(bool value) => _set(
+    ReaderSettings.horizontalPageTurn,
+    value,
+    current: horizontalPageTurn,
+    put: (v) => horizontalPageTurn = v,
+  );
+
+  void setHorizontalPageTurnStyle(ReaderHorizontalPageTurnStyle value) => _set(
+    ReaderSettings.horizontalPageTurnStyle,
+    value,
+    current: horizontalPageTurnStyle,
+    put: (v) => horizontalPageTurnStyle = v,
   );
 
   void setUse24HourClock(bool value, {bool force = false}) => _set(
