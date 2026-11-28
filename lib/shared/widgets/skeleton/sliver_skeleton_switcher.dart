@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
@@ -45,6 +46,7 @@ class _SliverSkeletonSwitcherState extends State<SliverSkeletonSwitcher>
   )..addStatusListener(_onStatus);
 
   /// 內容出現的進度（經過的時間比例，曲線由 [SkeletonReveal] 套）。
+  late final CurvedAnimation _fade = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
   late final Animation<double> _content = _controller;
   late final Animation<double> _skeleton = ReverseAnimation(_content);
 
@@ -87,11 +89,17 @@ class _SliverSkeletonSwitcherState extends State<SliverSkeletonSwitcher>
     // 建完整頁內容（書籍詳情在電腦 debug 模式約 50–100ms），骨架的呼吸在那
     // 一幀頓住；建內容也不和骨架變形、換場的第一段擠在同一幀（ADR 0018）。
     _built = null;
-    _controller.value = 1;
+    _controller.duration = const Duration(milliseconds: 150);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && round == _round && !widget.loading) {
+        unawaited(_controller.forward(from: 0));
+      }
+    });
   }
 
   @override
   void dispose() {
+    _fade.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -138,11 +146,14 @@ class _SliverSkeletonSwitcherState extends State<SliverSkeletonSwitcher>
   @override
   Widget build(BuildContext context) {
     if (widget.loading) {
-      return const SliverToBoxAdapter(child: SizedBox.shrink());
+      return const SliverToBoxAdapter(child: _DelayedSliverIndicator());
     }
-    return _SliverRevealScope(
-      revealing: false,
-      child: _contentFor(widget),
+    return SliverFadeTransition(
+      opacity: _fade,
+      sliver: _SliverRevealScope(
+        revealing: false,
+        child: _contentFor(widget),
+      ),
     );
   }
 }
@@ -448,4 +459,41 @@ class _SliverFadeInState extends State<SliverFadeIn>
   @override
   Widget build(BuildContext context) =>
       SliverFadeTransition(opacity: _opacity, sliver: widget.sliver);
+}
+
+
+class _DelayedSliverIndicator extends StatefulWidget {
+  const _DelayedSliverIndicator();
+
+  @override
+  State<_DelayedSliverIndicator> createState() =>
+      _DelayedSliverIndicatorState();
+}
+
+class _DelayedSliverIndicatorState extends State<_DelayedSliverIndicator> {
+  Timer? _timer;
+  bool _visible = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer(const Duration(milliseconds: 150), () {
+      if (mounted) setState(() => _visible = true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_visible) return const SizedBox.shrink();
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: 32),
+      child: Center(child: CupertinoActivityIndicator()),
+    );
+  }
 }
