@@ -195,29 +195,16 @@ final class LayoutPipeline {
         unawaited(_warmDiskMetricsForChapter(stored));
         return stored;
       }
-      final rough = await preprocessor.process(
+      final blocks = await preprocessor.process(
         text,
         maxBlockChars: maxBlockChars,
       );
       if (!current()) return null;
-      final blocks = await _pump.planChapterVisualLines(
-        rough,
-        maxBlockChars: maxBlockChars,
-        bodyStyle: BlockTextStyle.fromLayoutStyle(spec.style),
-        titleStyle: BlockTextStyle.fromLayoutStyle(spec.style, isTitle: true),
-        contentWidth: spec.textLayoutFrame.width,
-        cellWidth: spec.cellWidth,
-        textIndent: spec.style.textIndent.clamp(0, 8).toInt(),
-        priority: materialization.priority,
-      );
-      if (blocks == null || !current()) return null;
-      _layoutPlans[chapter] = ChapterLayoutPlan(blocks);
       _blocks[chapter] = blocks;
       _admission.registerChapter(blocks);
       // Disk reads may improve later reuse; neither first paint nor command
       // completion waits for this optional cache.
       unawaited(_warmDiskMetricsForChapter(blocks));
-      unawaited(_diskCache?.writePlan(blocks, fingerprint));
       return blocks;
     }();
     materialization.attach(task);
@@ -725,7 +712,7 @@ final class LayoutPipeline {
         priority: _priorityFor(headKey, anchor: anchor),
         indentChars: indentCharsFor(head, spec),
         trailingSpacing: _trailingSpacingFor(blocks, last, spec),
-        readerOwnedLinePlan: true,
+        readerOwnedLinePlan: group.length == 1,
       ),
     );
   }
