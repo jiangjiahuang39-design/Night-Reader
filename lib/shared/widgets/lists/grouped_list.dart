@@ -209,16 +209,8 @@ class _GroupedEntranceState extends State<_GroupedEntrance> {
     final entering =
         route != null &&
         (route.offstage || !(route.animation?.isCompleted ?? true));
-    _stage = entering ? _EntranceStage.entering : _EntranceStage.direct;
+    _stage = (entering && !widget.ready) ? _EntranceStage.entering : _EntranceStage.direct;
     if (!entering) return;
-    if (widget.ready) {
-      SchedulerBinding.instance.addPostFrameCallback((_) {
-        if (mounted && _stage == _EntranceStage.entering) {
-          setState(() => _stage = _EntranceStage.entered);
-        }
-      });
-      return;
-    }
     TransitionSettled.entered(context).then((_) async {
       // 進場最後一格之後再開始建內容，不和換頁擠在同一格。
       await SchedulerBinding.instance.endOfFrame;
