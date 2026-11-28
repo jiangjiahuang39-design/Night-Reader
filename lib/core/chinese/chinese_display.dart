@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 import 'package:night_reader/core/constant/prefer_key.dart';
 import 'package:night_reader/core/engine/reader/chinese_text_converter.dart';
@@ -18,7 +20,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// 在載入與變更時同步；App 啟動時由 [start] 讀出。
 abstract final class ChineseDisplay {
   /// 沒設定過時的模式：簡轉繁（維護者自己讀書用的設定，2026-11-06）。
-  static const int defaultMode = 1;
+  static const int defaultMode = 0;
 
   static final ChineseDisplayMode mode = ChineseDisplayMode();
   static const ChineseTextConverter _converter = ChineseTextConverter();
@@ -44,17 +46,44 @@ abstract final class ChineseDisplay {
 
   static Future<void> _start(SharedPreferences prefs) async {
     mode.value = prefs.getInt(PreferKey.readerChineseConvert) ?? defaultMode;
+    mode.removeListener(_onModeChanged);
+    mode.addListener(_onModeChanged);
+    if (mode.value == 0 &&
+        !languagePrefIsSimplified(prefs.getString(PreferKey.language))) {
+      return;
+    }
     try {
       await ChineseUtils.initialize();
     } catch (e, stack) {
       AppLog.e('ChineseUtils load error: $e', error: e, stackTrace: stack);
       _dictionaryFailed = true;
     }
-    // 書的資訊不轉換、介面也是繁體時，已顯示的文字不受字典影響，不必重建。
-    if (mode.value != 0 ||
-        languagePrefIsSimplified(prefs.getString(PreferKey.language))) {
-      mode.refresh();
+    mode.refresh();
+  }
+
+  static void _onModeChanged() {
+    if (mode.value != 0) unawaited(ensureLoaded());
+  }
+
+  static Future<void> ensureLoaded() {
+    if (ChineseUtils.isInitialized || _dictionaryFailed) {
+      return Future<void>.value();
     }
+    return _ensuring ??= _ensure();
+  }
+
+  static Future<void>? _ensuring;
+
+  static Future<void> _ensure() async {
+    try {
+      await ChineseUtils.initialize();
+    } catch (e, stack) {
+      AppLog.e('ChineseUtils load error: $e', error: e, stackTrace: stack);
+      _dictionaryFailed = true;
+    } finally {
+      _ensuring = null;
+    }
+    mode.refresh();
   }
 
   /// 目前的模式下，書籍資訊能不能照轉換後的樣子顯示：不轉換、字典已載入，
