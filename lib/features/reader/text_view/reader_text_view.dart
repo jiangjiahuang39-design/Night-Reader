@@ -1762,8 +1762,29 @@ class _ReaderTextViewState extends State<ReaderTextView>
     }
     final width = math.max(1.0, _viewportSize.width);
     final t = (_dragOffset.abs() / width).clamp(0.0, 1.0);
-    final dir = _dragDirection; // -1 = next page (drag left), +1 = prev page (drag right)
-    final snapshotWidget = RawImage(image: snapshot, fit: BoxFit.fill);
+    final dir = _dragDirection;
+    final snapshotWidget = ColoredBox(
+      color: widget.backgroundColor,
+      child: RawImage(image: snapshot, fit: BoxFit.fill),
+    );
+    final opaqueTarget = ColoredBox(
+      color: widget.backgroundColor,
+      child: targetPage,
+    );
+    Widget withEdgeShadow(Widget child, {required bool leftEdge}) => DecoratedBox(
+      decoration: BoxDecoration(
+        color: widget.backgroundColor,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.22 * (1 - t)),
+            blurRadius: 18,
+            spreadRadius: 1,
+            offset: Offset(leftEdge ? -4 : 4, 0),
+          ),
+        ],
+      ),
+      child: child,
+    );
 
     switch (widget.horizontalPageTurnStyle) {
       case ReaderHorizontalPageTurnStyle.slide:
@@ -1772,11 +1793,11 @@ class _ReaderTextViewState extends State<ReaderTextView>
           children: [
             Transform.translate(
               offset: Offset(_dragOffset - dir * width, 0),
-              child: targetPage,
+              child: opaqueTarget,
             ),
             Transform.translate(
               offset: Offset(_dragOffset, 0),
-              child: Opacity(opacity: (1 - 0.08 * t).clamp(0.0, 1.0), child: snapshotWidget),
+              child: snapshotWidget,
             ),
           ],
         );
@@ -1786,23 +1807,12 @@ class _ReaderTextViewState extends State<ReaderTextView>
             fit: StackFit.expand,
             children: [
               Transform.translate(
-                offset: Offset(-0.25 * width * t, 0),
-                child: Opacity(opacity: (1 - 0.15 * t).clamp(0.0, 1.0), child: snapshotWidget),
+                offset: Offset(-0.22 * width * t, 0),
+                child: snapshotWidget,
               ),
               Transform.translate(
                 offset: Offset(width + _dragOffset, 0),
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.16 * (1 - t)),
-                        blurRadius: 12,
-                        offset: const Offset(-4, 0),
-                      ),
-                    ],
-                  ),
-                  child: targetPage,
-                ),
+                child: withEdgeShadow(opaqueTarget, leftEdge: true),
               ),
             ],
           );
@@ -1811,23 +1821,12 @@ class _ReaderTextViewState extends State<ReaderTextView>
           fit: StackFit.expand,
           children: [
             Transform.translate(
-              offset: Offset(-0.25 * width * (1 - t), 0),
-              child: Opacity(opacity: (0.85 + 0.15 * t).clamp(0.0, 1.0), child: targetPage),
+              offset: Offset(-0.22 * width * (1 - t), 0),
+              child: opaqueTarget,
             ),
             Transform.translate(
               offset: Offset(_dragOffset, 0),
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.16 * (1 - t)),
-                      blurRadius: 12,
-                      offset: const Offset(-4, 0),
-                    ),
-                  ],
-                ),
-                child: snapshotWidget,
-              ),
+              child: withEdgeShadow(snapshotWidget, leftEdge: true),
             ),
           ],
         );
@@ -1835,13 +1834,14 @@ class _ReaderTextViewState extends State<ReaderTextView>
         return Stack(
           fit: StackFit.expand,
           children: [
+            ColoredBox(color: widget.backgroundColor),
             Transform.translate(
-              offset: Offset(0.25 * _dragOffset, 0),
+              offset: Offset(0.3 * _dragOffset, 0),
               child: Opacity(opacity: (1 - t).clamp(0.0, 1.0), child: snapshotWidget),
             ),
             Transform.translate(
-              offset: Offset(-dir * 0.25 * width * (1 - t), 0),
-              child: Opacity(opacity: t.clamp(0.0, 1.0), child: targetPage),
+              offset: Offset(_dragOffset - dir * width, 0),
+              child: withEdgeShadow(opaqueTarget, leftEdge: dir == -1),
             ),
           ],
         );
@@ -1849,10 +1849,11 @@ class _ReaderTextViewState extends State<ReaderTextView>
         return Stack(
           fit: StackFit.expand,
           children: [
-            snapshotWidget,
+            ColoredBox(color: widget.backgroundColor),
+            Opacity(opacity: (1 - t).clamp(0.0, 1.0), child: snapshotWidget),
             Transform.translate(
-              offset: Offset(-dir * 48.0 * (1 - t), 0),
-              child: Opacity(opacity: t.clamp(0.0, 1.0), child: targetPage),
+              offset: Offset(-dir * 64.0 * (1 - t), 0),
+              child: Opacity(opacity: t.clamp(0.0, 1.0), child: opaqueTarget),
             ),
           ],
         );
@@ -1895,7 +1896,7 @@ class _ReaderTextViewState extends State<ReaderTextView>
             physics: widget.horizontalPageTurn ? const NeverScrollableScrollPhysics() : _physics,
             // 跨在上下緣的段落畫到正文區外，閱讀頁框架只露出正文與頁首頁尾
             // 之間那段空隙，並在那裡漸隱（ReaderPageShell）。
-            clipBehavior: Clip.none,
+            clipBehavior: widget.horizontalPageTurn ? Clip.hardEdge : Clip.none,
           ),
         );
         double bottomMaskHeight = 0.0;
@@ -1907,15 +1908,20 @@ class _ReaderTextViewState extends State<ReaderTextView>
             currentTop,
             _viewportSize.height,
           );
-          bottomMaskHeight = (_viewportSize.height - (snappedBottom - currentTop))
-              .clamp(0.0, _viewportSize.height)
-              .toDouble();
+          bottomMaskHeight =
+              (_viewportSize.height - (snappedBottom - currentTop) + 1.5)
+                  .clamp(0.0, _viewportSize.height)
+                  .toDouble();
         }
         final basePage = RepaintBoundary(
           key: _pageBoundaryKey,
-          child: Stack(
-            fit: StackFit.expand,
-            clipBehavior: Clip.none,
+          child: ColoredBox(
+            color: widget.backgroundColor,
+            child: ClipRect(
+              clipBehavior: widget.horizontalPageTurn ? Clip.hardEdge : Clip.none,
+              child: Stack(
+                fit: StackFit.expand,
+                clipBehavior: widget.horizontalPageTurn ? Clip.hardEdge : Clip.none,
             children: <Widget>[
               visualContent,
               Positioned.fill(
@@ -1949,6 +1955,8 @@ class _ReaderTextViewState extends State<ReaderTextView>
                   ),
                 ),
             ],
+              ),
+            ),
           ),
         );
         final readerStack = _buildHorizontalTransition(basePage);
