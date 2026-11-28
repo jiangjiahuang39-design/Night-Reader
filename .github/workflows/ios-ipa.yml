@@ -1,3 +1,37 @@
+name: iOS IPA Build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-ipa-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-ios:
+    name: Build unsigned iOS IPA
+    runs-on: macos-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.2"
+          channel: stable
+          cache: true
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
       - name: Build unsigned iOS app
         run: |
           flutter build ios --config-only --release --no-codesign
@@ -20,5 +54,13 @@
           cp -R build/ios_derived/Build/Products/Release-iphoneos/Runner.app \
             "$RUNNER_TEMP/ipa/Payload/"
           cd "$RUNNER_TEMP/ipa"
-          zip -qry Night-Reader-Unsigned.ipa Payload
-          test -s Night-Reader-Unsigned.ipa
+          zip -qry "Night-Reader-Unsigned-${{ github.run_number }}.ipa" Payload
+          test -s "Night-Reader-Unsigned-${{ github.run_number }}.ipa"
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: Night-Reader-iOS-IPA-${{ github.run_number }}
+          path: ${{ runner.temp }}/ipa/Night-Reader-Unsigned-${{ github.run_number }}.ipa
+          if-no-files-found: error
+          retention-days: 30
