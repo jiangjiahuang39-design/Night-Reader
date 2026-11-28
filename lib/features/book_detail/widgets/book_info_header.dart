@@ -132,7 +132,7 @@ class BookInfoHeader extends StatelessWidget {
               duration: const Duration(milliseconds: 150),
               switchInCurve: Curves.easeOut,
               child: loading
-                  ? const SizedBox.shrink()
+                  ? const SizedBox.expand()
                   : _actionRow(_actionButtons()),
             ),
           ),
