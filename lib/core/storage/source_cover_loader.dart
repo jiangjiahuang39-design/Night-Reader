@@ -36,7 +36,7 @@ abstract final class SourceCoverLoader {
 
   /// 照書源抓的封面在快取裡的鍵：和一般圖片（鍵就是網址）分開，這一版之前
   /// 照一般圖片抓下、沒解密或沒帶標頭的那份不會被當成照書源抓的。
-  static String sourceKey(String url) => 'source\u0000$url';
+  static String sourceKey(String url) => 'source:$url';
 
   /// [url] 這張封面的位元組；[origin] 是書的書源網址，[book] 交給書源的解密
   /// 程式（`coverDecodeJs` 的 `book`；Legado 畫面上的封面不傳，存封面時才
