@@ -571,9 +571,9 @@ final class TextGeometry {
   /// 尋找從 [top] 開始的一屏（高度 [viewportHeight]）內，最後一個完整放得下
   /// 的視覺行底邊座標；若最底端剛好卡到插圖放不下，則退回該插圖頂端。
   double snapPageBottom(double top, double viewportHeight) {
-    final bottom = top + math.max(1.0, viewportHeight);
+    final bottom = top + math.max(1.0, viewportHeight) - 2.0;
     final keys = _documentIndex
-        .keysInRange(top, bottom)
+        .keysInRange(top, bottom + 2.0)
         .toList(growable: false);
     for (var i = keys.length - 1; i >= 0; i--) {
       final key = keys[i];
@@ -584,10 +584,10 @@ final class TextGeometry {
         final block = blocks.blocks[key.blockIndex];
         if (block.isIllustration) {
           final h = _documentIndex.metricsFor(key)?.height ?? 0.0;
-          if (blockTop + h > bottom + 0.5 && blockTop > top + 0.5) {
+          if (blockTop + h > bottom && blockTop > top + 1.0) {
             return blockTop;
           }
-          if (blockTop + h <= bottom + 0.5 && blockTop + h > top + 0.5) {
+          if (blockTop + h <= bottom && blockTop + h > top + 1.0) {
             return blockTop + h;
           }
           continue;
@@ -601,7 +601,17 @@ final class TextGeometry {
         if (line == null) continue;
         final lineBottom =
             blockTop - entry.localTop + (line.baseline - line.ascent) + line.height;
-        if (lineBottom <= bottom + 0.5 && lineBottom > top + 0.5) {
+        if (lineBottom <= bottom && lineBottom > top + 1.0) {
+          if (ln + 1 < paragraph.numberOfLines) {
+            final next = paragraph.getLineMetricsAt(ln + 1);
+            if (next != null) {
+              final nextTop =
+                  blockTop - entry.localTop + (next.baseline - next.ascent);
+              if (nextTop > top + 1.0) {
+                return math.min(lineBottom, nextTop);
+              }
+            }
+          }
           return lineBottom;
         }
       }
