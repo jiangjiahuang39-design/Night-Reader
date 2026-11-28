@@ -1270,8 +1270,13 @@ class _ReaderTextViewState extends State<ReaderTextView>
         _restoreCore(location, isCurrent: isCurrent),
   );
 
+  ReaderViewportPageCommand? _verticalNextPage;
+  ReaderViewportPageCommand? _verticalPrevPage;
+
   void _attachController() {
     _viewportCommands.attach(widget.viewportController);
+    _verticalNextPage = widget.viewportController?.moveToNextPage;
+    _verticalPrevPage = widget.viewportController?.moveToPrevPage;
     widget.viewportController
       ?..moveToNextPage = _handleMoveToNextPage
       ..moveToPrevPage = _handleMoveToPrevPage
@@ -1283,14 +1288,14 @@ class _ReaderTextViewState extends State<ReaderTextView>
     if (widget.horizontalPageTurn) {
       return _turnHorizontalPage(forward: true, isWanted: isWanted);
     }
-    return _viewportCommands.nextPage(isWanted: isWanted);
+    return _verticalNextPage?.call(isWanted: isWanted) ?? Future.value(false);
   }
 
   Future<bool> _handleMoveToPrevPage({bool Function()? isWanted}) {
     if (widget.horizontalPageTurn) {
       return _turnHorizontalPage(forward: false, isWanted: isWanted);
     }
-    return _viewportCommands.previousPage(isWanted: isWanted);
+    return _verticalPrevPage?.call(isWanted: isWanted) ?? Future.value(false);
   }
 
   Future<ui.Image?> _capturePageSnapshot() async {
