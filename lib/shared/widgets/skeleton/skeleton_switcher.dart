@@ -152,13 +152,17 @@ class _SkeletonSwitcherState extends State<SkeletonSwitcher>
     if (duringBuild) {
       _controller.value = 0;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && !widget.loading) unawaited(_controller.forward());
+        if (!mounted || widget.loading) return;
+        unawaited(_controller.forward());
+        widget.onRevealed?.call();
       });
     } else {
       unawaited(_controller.forward(from: 0));
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !widget.loading) widget.onRevealed?.call();
+      });
     }
     widget.entrance?.revealNow();
-    widget.onRevealed?.call();
   }
 
   void _prepare(SkeletonRevealSide incoming) {
