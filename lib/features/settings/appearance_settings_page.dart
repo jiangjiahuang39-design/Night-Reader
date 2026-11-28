@@ -155,19 +155,39 @@ class AppearanceSettingsPage extends StatelessWidget {
           ),
           GroupedSection(
             children: [
-              Builder(
-                builder: (rowContext) => GroupedRow(
-                  title: '換頁動畫',
-                  value: themeSettings.pageTransition.label,
-                  showChevron: false,
-                  onTap: () => _pickOption(
-                    rowContext,
-                    AppPageTransition.values,
-                    label: (transition) => transition.label,
-                    selected: themeSettings.pageTransition,
-                    onPicked: themeSettings.setPageTransition,
-                  ),
+              GroupedLabeledRow(
+                label: '翻頁方式',
+                child: GlassSegmented<bool>(
+                  expand: false,
+                  segments: const [
+                    GlassSegment(false, '縱向'),
+                    GlassSegment(true, '橫向'),
+                  ],
+                  selected: themeSettings.horizontalPageTurn,
+                  onChanged: themeSettings.setHorizontalPageTurn,
                 ),
+              ),
+              Builder(
+                builder: (rowContext) {
+                  final options = themeSettings.horizontalPageTurn
+                      ? ThemeSettingsProvider.horizontalTransitions
+                      : AppPageTransition.values;
+                  final selected = themeSettings.horizontalPageTurn
+                      ? themeSettings.effectiveHorizontalTransition
+                      : themeSettings.pageTransition;
+                  return GroupedRow(
+                    title: '換頁動畫',
+                    value: selected.label,
+                    showChevron: false,
+                    onTap: () => _pickOption(
+                      rowContext,
+                      options,
+                      label: (transition) => transition.label,
+                      selected: selected,
+                      onPicked: themeSettings.setPageTransition,
+                    ),
+                  );
+                },
               ),
               Builder(
                 builder: (rowContext) => GroupedRow(
