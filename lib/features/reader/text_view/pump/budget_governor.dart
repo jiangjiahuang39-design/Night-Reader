@@ -30,6 +30,7 @@ final class BudgetGovernor {
 
   static const int _ballisticCapMicros = 4000;
   static const int _rebuildingCapMicros = 6000;
+  static const int _loadingCapMicros = 24000;
   static const double _periodTolerance = 0.15;
 
   double _framePeriodMicros = 0;
@@ -94,9 +95,11 @@ final class BudgetGovernor {
     // 上限是為了畫面上的動畫不掉幀。載入時正文雖然蓋著，骨架在呼吸、開書
     // 時換頁也可能還在收尾，和甩動捲動一樣用 [_ballisticCapMicros]：慢一點
     // 排好，換骨架全程不掉幀（ADR 0018）。
+    if (state == PumpState.loading) return _loadingCapMicros;
     final cap = switch (state) {
       PumpState.dragging => slice,
-      PumpState.ballistic || PumpState.loading => _ballisticCapMicros,
+      PumpState.ballistic => _ballisticCapMicros,
+      PumpState.loading => _loadingCapMicros,
       PumpState.rebuilding || PumpState.idle => _rebuildingCapMicros,
     };
     return math.max(slice, _headroomMicros(capMicros: cap));
