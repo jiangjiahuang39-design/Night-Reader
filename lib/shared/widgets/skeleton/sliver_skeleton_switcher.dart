@@ -87,15 +87,7 @@ class _SliverSkeletonSwitcherState extends State<SliverSkeletonSwitcher>
     // 建完整頁內容（書籍詳情在電腦 debug 模式約 50–100ms），骨架的呼吸在那
     // 一幀頓住；建內容也不和骨架變形、換場的第一段擠在同一幀（ADR 0018）。
     _built = null;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || round != _round || widget.loading) return;
-      final reveal = SkeletonReveal.of(context);
-      setState(() {
-        _sweep = reveal.sweeps;
-      });
-      _controller.duration = reveal.duration;
-      unawaited(_controller.forward());
-    });
+    _controller.value = 1;
   }
 
   @override
@@ -145,41 +137,12 @@ class _SliverSkeletonSwitcherState extends State<SliverSkeletonSwitcher>
 
   @override
   Widget build(BuildContext context) {
-    final loading = widget.loading;
-    final revealing = !loading && !_controller.isCompleted;
-    // 兩層各有 key：骨架移出時內容不會被錯配、重建。骨架從載入中到換場一直
-    // 是同一個 sliver，只從佔位改成疊在內容上：原本載入中與換場時包在不同
-    // 的 sliver 裡，內容到的那一幀整個骨架被搬過去、全部重建，和建內容擠
-    // 在同一幀（ADR 0018）。
-    final building = !loading && _built != null;
-    return SliverMainAxisGroup(
-      slivers: [
-        // 先列的 sliver 畫在上面：骨架疊在內容上。
-        if (loading || revealing)
-          _SliverOverlay(
-            key: const ValueKey('skeleton'),
-            takesSpace: loading,
-            extent: _extent,
-            child: _buildSkeleton(),
-          ),
-        if (!loading)
-          _SliverRevealLayer(
-            key: const ValueKey('content'),
-            presence: _content,
-            sweep: _sweep,
-            // 還在一個個建的內容全透明，不接點擊。
-            sliver: SliverIgnorePointer(
-              ignoring: building,
-              sliver: _SliverRevealScope(
-                revealing: revealing,
-                child: _contentFor(widget),
-              ),
-            ),
-          ),
-        // 內容還沒建完時撐住骨架原本的捲動範圍：已經往下捲的骨架不會因為
-        // 內容暫時比較短而被拉回去。
-        if (building) _SliverHold(key: const ValueKey('hold'), extent: _extent),
-      ],
+    if (widget.loading) {
+      return const SliverToBoxAdapter(child: SizedBox.shrink());
+    }
+    return _SliverRevealScope(
+      revealing: false,
+      child: _contentFor(widget),
     );
   }
 }
