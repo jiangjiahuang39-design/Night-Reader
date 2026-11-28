@@ -14,7 +14,6 @@ import 'package:night_reader/core/chinese/chinese_display.dart';
 import 'package:night_reader/core/diagnostics/crash_handler.dart';
 import 'package:night_reader/core/database/default_data.dart';
 import 'package:night_reader/core/download/download_service.dart';
-import 'package:night_reader/core/playback/system_playback.dart';
 import 'package:night_reader/core/sync/sync_service.dart';
 import 'package:night_reader/features/audiobook/audiobook_mini_button.dart';
 import 'package:night_reader/features/about/update_check_runner.dart';
@@ -361,7 +360,6 @@ class _MainPageState extends State<MainPage>
   Future<void> _launchPrepared() => Future.wait([
     context.read<BookshelfProvider>().firstLoad,
     ChineseDisplay.loaded,
-    SystemPlayback.instance.ready(),
     AppLock.instance.whenOpen(),
   ]);
 
