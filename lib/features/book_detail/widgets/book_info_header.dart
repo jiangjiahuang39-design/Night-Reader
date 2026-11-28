@@ -7,8 +7,6 @@ import 'package:night_reader/shared/theme/app_chrome.dart';
 import 'package:night_reader/shared/theme/app_text_styles.dart';
 import 'package:night_reader/shared/theme/app_tokens.dart';
 import 'package:night_reader/shared/widgets/glass/glass.dart';
-import 'package:night_reader/shared/widgets/skeleton/grouped_list_skeleton.dart';
-import 'package:night_reader/shared/widgets/skeleton/skeleton.dart';
 
 import '../book_detail_provider.dart';
 
@@ -128,16 +126,12 @@ class BookInfoHeader extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: AppGrouped.margin),
           child: SizedBox(
             height: _ActionButton.height,
-            child: SkeletonSwitcher(
-              loading: loading,
-              skeleton: _actionRow([
-                for (var i = 0; i < 3; i++)
-                  const SkeletonBox(
-                    height: _ActionButton.height,
-                    borderRadius: AppRadius.cardMd,
-                  ),
-              ]),
-              builder: (_) => _actionRow(_actionButtons()),
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 150),
+              switchInCurve: Curves.easeOut,
+              child: loading
+                  ? const SizedBox.shrink()
+                  : _actionRow(_actionButtons()),
             ),
           ),
         ),
