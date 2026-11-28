@@ -376,53 +376,13 @@ class _LaunchEntranceState extends State<LaunchEntrance>
         if (mounted) widget.onFinished?.call();
       }),
     );
-    if (MediaQuery.disableAnimationsOf(context)) {
-      _controller.value = 1;
-      // 沒有長出與呼吸，也就沒有呼吸前的準備：書架到了直接換成內容。
-      motion._breathe();
-      motion._pauseOver.complete();
-      return;
-    }
-    // 骨架長完，這一格整片重建：等它畫完，書架的資料已經到了就先準備書架、
-    // 拍好兩張定格畫面（[LaunchEntranceMotion.requestPreparation]），清掉
-    // 留下的記憶體，再停 idle 才開始呼吸（長完的通知在這一格建畫面之前，從
-    // 那時就算的話，這一格越重、停得越短），開始呼吸才算停頓。
-    void onStatus(AnimationStatus status) {
-      if (!status.isCompleted) return;
-      _controller.removeStatusListener(onStatus);
-      SchedulerBinding.instance.endOfFrame.then((_) async {
-        if (!mounted) return;
-        motion._timeline = _Timeline.grown;
-        final start = motion._preparationStart;
-        if (start != null) {
-          start.complete();
-          await motion._preparationDone.future;
-          if (!mounted) return;
-          _collectGarbage();
-        }
-        _timer = Timer(LaunchEntranceMotion.idle, () {
-          // 書架已經在底下建好、兩張定格畫面也拍好：不呼吸，停完就換場
-          // （ADR 0035）。
-          if (motion.screen.captured) {
-            motion._skipBreath();
-            return;
-          }
-          motion._breathe();
-          _timer = Timer(LaunchEntranceMotion.pause, () {
-            if (!motion._pauseOver.isCompleted) motion._pauseOver.complete();
-          });
-        });
-      });
-    }
-
-    _controller.addStatusListener(onStatus);
-    // 第一幀只畫底色、和系統啟動畫面一樣；畫完、準備工作也做完，清掉開 App
-    // 留下的記憶體，再隔 idle 才開始長骨架。
+    _controller.value = 1;
+    motion._breathe();
+    if (!motion._pauseOver.isCompleted) motion._pauseOver.complete();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       try {
         await widget.prepared?.call();
       } catch (error, stackTrace) {
-        // 準備工作失敗也照常進場：書架自己會顯示讀不到，不能停在底色。
         FlutterError.reportError(
           FlutterErrorDetails(
             exception: error,
@@ -432,15 +392,8 @@ class _LaunchEntranceState extends State<LaunchEntrance>
           ),
         );
       }
-      // 資料回來排的那次重建：等它畫完。
-      await SchedulerBinding.instance.endOfFrame;
       if (!mounted) return;
-      _collectGarbage();
-      _timer = Timer(LaunchEntranceMotion.idle, () {
-        if (!mounted) return;
-        _motion!._timeline = _Timeline.growing;
-        _controller.forward();
-      });
+      motion.revealNow();
     });
   }
 
