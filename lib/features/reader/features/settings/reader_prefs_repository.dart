@@ -323,6 +323,16 @@ abstract final class ReaderSettings {
     parse: ReaderHighlightColor.parse,
     encode: (value) => value.name,
   );
+  static final horizontalPageTurn = _bool(
+    PreferKey.readerHorizontalPageTurn,
+    false,
+  );
+  static final horizontalPageTurnStyle = _text<ReaderHorizontalPageTurnStyle>(
+    PreferKey.readerHorizontalPageTurnStyle,
+    () => ReaderHorizontalPageTurnStyle.defaultStyle,
+    parse: ReaderHorizontalPageTurnStyle.parse,
+    encode: (value) => value.name,
+  );
   static final highlightStrength = _double(
     PreferKey.readerHighlightStrength,
     ReaderHighlightStrength.defaultValue,
@@ -494,6 +504,8 @@ abstract final class ReaderSettings {
     hideNavigationBar,
     pageTurnOverlap,
     pageTurnSpeed,
+    horizontalPageTurn,
+    horizontalPageTurnStyle,
     use24HourClock,
     progressFractionDigits,
     maxDim,
@@ -566,6 +578,9 @@ class ReaderPrefsSnapshot {
   int get pageTurnOverlap => valueOf(ReaderSettings.pageTurnOverlap);
   ReaderPageTurnSpeed get pageTurnSpeed =>
       valueOf(ReaderSettings.pageTurnSpeed);
+  bool get horizontalPageTurn => valueOf(ReaderSettings.horizontalPageTurn);
+  ReaderHorizontalPageTurnStyle get horizontalPageTurnStyle =>
+      valueOf(ReaderSettings.horizontalPageTurnStyle);
   bool get use24HourClock => valueOf(ReaderSettings.use24HourClock);
   int get progressFractionDigits =>
       valueOf(ReaderSettings.progressFractionDigits);
