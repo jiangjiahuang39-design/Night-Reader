@@ -64,6 +64,8 @@ class ThemeSettingsProvider extends ChangeNotifier {
     pageTransition = AppPageTransition.fromStorage(
       _prefs.getString(PreferKey.pageTransition),
     );
+    horizontalPageTurn =
+        _prefs.getBool(PreferKey.readerHorizontalPageTurn) ?? false;
     uiFont = AppFont.fromStorage(_prefs.getString(PreferKey.uiFont));
     // 另一台選了這台還沒下載的字型：在背景下載，好了再換上。
     unawaited(FontLibrary.instance.ensure(uiFont));
@@ -122,6 +124,19 @@ class ThemeSettingsProvider extends ChangeNotifier {
 
   /// 全 App 換頁共用的轉場。
   late AppPageTransition pageTransition;
+  bool horizontalPageTurn = false;
+
+  static const List<AppPageTransition> horizontalTransitions = [
+    AppPageTransition.slide,
+    AppPageTransition.cover,
+    AppPageTransition.forward,
+    AppPageTransition.glide,
+  ];
+
+  AppPageTransition get effectiveHorizontalTransition =>
+      horizontalTransitions.contains(pageTransition)
+          ? pageTransition
+          : AppPageTransition.slide;
 
   /// 主頁分頁列與搜尋鈕的樣子；開 App 時在第一幀前讀（[TabBarLook.restore]）。
   TabBarLook get tabBarLook => TabBarLook.current.value;
@@ -219,6 +234,17 @@ class ThemeSettingsProvider extends ChangeNotifier {
     if (pageTransition == value) return;
     pageTransition = value;
     _prefs.setString(PreferKey.pageTransition, value.name);
+    notifyListeners();
+  }
+
+  void setHorizontalPageTurn(bool value) {
+    if (horizontalPageTurn == value) return;
+    horizontalPageTurn = value;
+    _prefs.setBool(PreferKey.readerHorizontalPageTurn, value);
+    if (value && !horizontalTransitions.contains(pageTransition)) {
+      pageTransition = AppPageTransition.slide;
+      _prefs.setString(PreferKey.pageTransition, pageTransition.name);
+    }
     notifyListeners();
   }
 
