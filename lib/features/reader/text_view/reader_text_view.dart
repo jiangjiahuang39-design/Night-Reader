@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 
 import 'package:night_reader/core/models/book/book_chapter.dart';
 import 'package:night_reader/shared/theme/app_tokens.dart';
@@ -14,6 +15,7 @@ import 'package:night_reader/features/reader/features/tts/reader_tts_highlight.d
 import 'package:night_reader/features/reader/layout/reader_style_preferences.dart';
 import 'package:night_reader/features/reader/session/reader_location.dart';
 import 'package:night_reader/features/reader/session/reader_operation_token.dart';
+import 'package:night_reader/features/reader/features/settings/reader_page_turn_speed.dart';
 import 'package:night_reader/features/reader/session/reader_runtime.dart';
 import 'package:night_reader/features/reader/session/reader_state.dart';
 import 'package:night_reader/features/reader/viewport/reader_pointer_tap_layer.dart';
@@ -79,6 +81,8 @@ class ReaderTextView extends StatefulWidget {
     this.paragraphCacheCapacity = 512,
     this.pageTurnOverlap = 1,
     this.pageTurnDuration = const Duration(milliseconds: 260),
+    this.horizontalPageTurn = false,
+    this.horizontalPageTurnStyle = ReaderHorizontalPageTurnStyle.slide,
     this.skeletonBreath,
   });
 
@@ -149,6 +153,8 @@ class ReaderTextView extends StatefulWidget {
   /// 翻頁時上一屏留在畫面上的行數，與捲過一屏要多久。
   final int pageTurnOverlap;
   final Duration pageTurnDuration;
+  final bool horizontalPageTurn;
+  final ReaderHorizontalPageTurnStyle horizontalPageTurnStyle;
 
   @override
   State<ReaderTextView> createState() => _ReaderTextViewState();
@@ -158,6 +164,14 @@ class _ReaderTextViewState extends State<ReaderTextView>
     with TickerProviderStateMixin {
   static const String _friendlyErrorMessage = '閱讀內容暫時無法顯示，請稍後再試';
   final GlobalKey _centerKey = GlobalKey(debugLabel: 'text-view-center-sliver');
+  final GlobalKey _pageBoundaryKey = GlobalKey(debugLabel: 'horizontal-page-boundary');
+  final List<double> _pageHistory = <double>[];
+  ui.Image? _dragSnapshot;
+  double? _dragOriginTop;
+  double _dragOffset = 0.0;
+  int _dragDirection = 0;
+  AnimationController? _pageTurnAnim;
+  Animation<double>? _pageTurnCurve;
   final MeasurementStore _measurementStore = MeasurementStore();
   final DocumentIndex _documentIndex = DocumentIndex(
     centerKey: const BlockKey(chapterIndex: 0, blockIndex: 0),
@@ -394,6 +408,9 @@ class _ReaderTextViewState extends State<ReaderTextView>
     _admission.dispose();
     _scrollController?.dispose();
     _touch.dispose();
+    _pageTurnAnim?.dispose();
+    _dragSnapshot?.dispose();
+    _dragSnapshot = null;
     if (_stage case _AwaitingReveal(:final stillGap)) stillGap?.cancel();
     _veil.dispose();
     super.dispose();
@@ -568,6 +585,8 @@ class _ReaderTextViewState extends State<ReaderTextView>
       if (!await _awaitCovered() || !isCurrent()) return false;
     }
     // 開書、跳章與重新定位都是使用者的動作：之前取不到的章節都再試一次。
+    _pageHistory.clear();
+    _cancelHorizontalDrag();
     _chapterRepo.forgetFailures();
     final pipeline = _pipeline;
     final chapter = location.chapterIndex
@@ -1254,8 +1273,224 @@ class _ReaderTextViewState extends State<ReaderTextView>
   void _attachController() {
     _viewportCommands.attach(widget.viewportController);
     widget.viewportController
-      ?..dismissSelection = _touch.dismiss
+      ?..moveToNextPage = _handleMoveToNextPage
+      ..moveToPrevPage = _handleMoveToPrevPage
+      ..dismissSelection = _touch.dismiss
       ..isTextCovered = _isTextCovered;
+  }
+
+  Future<bool> _handleMoveToNextPage({bool Function()? isWanted}) {
+    if (widget.horizontalPageTurn) {
+      return _turnHorizontalPage(forward: true, isWanted: isWanted);
+    }
+    return _viewportCommands.nextPage(isWanted: isWanted);
+  }
+
+  Future<bool> _handleMoveToPrevPage({bool Function()? isWanted}) {
+    if (widget.horizontalPageTurn) {
+      return _turnHorizontalPage(forward: false, isWanted: isWanted);
+    }
+    return _viewportCommands.previousPage(isWanted: isWanted);
+  }
+
+  Future<ui.Image?> _capturePageSnapshot() async {
+    final boundary =
+        _pageBoundaryKey.currentContext?.findRenderObject()
+            as RenderRepaintBoundary?;
+    if (boundary == null || !boundary.hasSize) return null;
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    return boundary.toImage(pixelRatio: dpr);
+  }
+
+  void _cancelHorizontalDrag() {
+    _pageTurnAnim?.stop();
+    _dragSnapshot?.dispose();
+    _dragSnapshot = null;
+    _dragOriginTop = null;
+    _dragOffset = 0.0;
+    _dragDirection = 0;
+  }
+
+  double _computeHorizontalTarget({
+    required double originTop,
+    required bool forward,
+    required ScrollPosition pos,
+  }) {
+    if (forward) {
+      final snapped = _pipeline.geometry.snapPageBottom(
+        originTop,
+        _viewportSize.height,
+      );
+      return snapped.clamp(pos.minScrollExtent, pos.maxScrollExtent).toDouble();
+    }
+    final prev = _pageHistory.isNotEmpty
+        ? _pageHistory.last
+        : _pipeline.geometry.snapPageTop(originTop, _viewportSize.height);
+    return prev.clamp(pos.minScrollExtent, pos.maxScrollExtent).toDouble();
+  }
+
+  Future<bool> _turnHorizontalPage({
+    required bool forward,
+    bool Function()? isWanted,
+  }) async {
+    if (!mounted || (isWanted != null && !isWanted())) return false;
+    final controller = _scrollController;
+    if (controller == null || !controller.hasClients) return false;
+    if ((_pageTurnAnim?.isAnimating ?? false) || _dragSnapshot != null) {
+      return false;
+    }
+    final pos = controller.position;
+    final originTop = pos.pixels;
+    final targetTop = _computeHorizontalTarget(
+      originTop: originTop,
+      forward: forward,
+      pos: pos,
+    );
+    if ((targetTop - originTop).abs() < 1.0) return false;
+
+    final snapshot = await _capturePageSnapshot();
+    if (!mounted || (isWanted != null && !isWanted())) {
+      snapshot?.dispose();
+      return false;
+    }
+    if (forward) {
+      _pageHistory.add(originTop);
+    } else if (_pageHistory.isNotEmpty) {
+      _pageHistory.removeLast();
+    }
+    pos.jumpTo(targetTop);
+    _dragSnapshot?.dispose();
+    _dragSnapshot = snapshot;
+    _dragOriginTop = originTop;
+    _dragDirection = forward ? -1 : 1;
+    _dragOffset = 0.0;
+
+    final width = math.max(1.0, _viewportSize.width);
+    await _animateHorizontalTo(
+      endOffset: forward ? -width : width,
+      commit: true,
+      originTop: originTop,
+    );
+    return mounted;
+  }
+
+  Future<void> _animateHorizontalTo({
+    required double endOffset,
+    required bool commit,
+    required double originTop,
+  }) async {
+    final anim = _pageTurnAnim ??= AnimationController(vsync: this);
+    anim.duration = widget.pageTurnDuration;
+    final startOffset = _dragOffset;
+    _pageTurnCurve = CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
+    void listener() {
+      if (!mounted) return;
+      setState(() {
+        _dragOffset =
+            startOffset + (endOffset - startOffset) * _pageTurnCurve!.value;
+      });
+    }
+
+    anim.addListener(listener);
+    try {
+      await anim.forward(from: 0);
+    } finally {
+      anim.removeListener(listener);
+    }
+    if (!mounted) return;
+    if (commit) {
+      if (_dragDirection == -1 &&
+          (_pageHistory.isEmpty || (_pageHistory.last - originTop).abs() > 0.5)) {
+        _pageHistory.add(originTop);
+      } else if (_dragDirection == 1 && _pageHistory.isNotEmpty) {
+        _pageHistory.removeLast();
+      }
+      unawaited(_handleScrollSettled());
+    } else {
+      _scrollController?.position.jumpTo(originTop);
+    }
+    _dragSnapshot?.dispose();
+    _dragSnapshot = null;
+    _dragOriginTop = null;
+    _dragOffset = 0.0;
+    _dragDirection = 0;
+    setState(() {});
+  }
+
+  void _onHorizontalDragStart(DragStartDetails details) {
+    if (!widget.horizontalPageTurn) return;
+    if ((_pageTurnAnim?.isAnimating ?? false) || _veilHoldsText) return;
+    final controller = _scrollController;
+    if (controller == null || !controller.hasClients) return;
+    _dragOriginTop = controller.position.pixels;
+    _dragOffset = 0.0;
+    _dragDirection = 0;
+    unawaited(
+      _capturePageSnapshot().then((img) {
+        if (!mounted || _dragOriginTop == null) {
+          img?.dispose();
+          return;
+        }
+        _dragSnapshot?.dispose();
+        setState(() => _dragSnapshot = img);
+      }),
+    );
+  }
+
+  void _onHorizontalDragUpdate(DragUpdateDetails details) {
+    if (!widget.horizontalPageTurn || _dragOriginTop == null) return;
+    final controller = _scrollController;
+    if (controller == null || !controller.hasClients) return;
+    final width = math.max(1.0, _viewportSize.width);
+    final originTop = _dragOriginTop!;
+    final pos = controller.position;
+    final nextOffset = (_dragOffset + details.delta.dx).clamp(-width, width);
+    final newDir = nextOffset < -0.5 ? -1 : (nextOffset > 0.5 ? 1 : 0);
+    if (newDir != 0 && newDir != _dragDirection) {
+      final targetTop = _computeHorizontalTarget(
+        originTop: originTop,
+        forward: newDir == -1,
+        pos: pos,
+      );
+      if ((targetTop - originTop).abs() < 1.0) {
+        setState(() => _dragOffset = 0.0);
+        return;
+      }
+      _dragDirection = newDir;
+      pos.jumpTo(targetTop);
+    }
+    setState(() => _dragOffset = nextOffset);
+  }
+
+  void _onHorizontalDragEnd(DragEndDetails details) {
+    if (!widget.horizontalPageTurn || _dragOriginTop == null) return;
+    final width = math.max(1.0, _viewportSize.width);
+    final originTop = _dragOriginTop!;
+    if (_dragDirection == 0) {
+      _cancelHorizontalDrag();
+      setState(() {});
+      return;
+    }
+    final velocity = details.velocity.pixelsPerSecond.dx;
+    final commit =
+        _dragOffset.abs() > width * 0.25 ||
+        (velocity * _dragDirection > 300.0);
+    final endOffset = commit ? (_dragDirection * width) : 0.0;
+    unawaited(
+      _animateHorizontalTo(
+        endOffset: endOffset,
+        commit: commit,
+        originTop: originTop,
+      ),
+    );
+  }
+
+  void _onHorizontalDragCancel() {
+    if (_dragOriginTop == null) return;
+    final originTop = _dragOriginTop!;
+    _scrollController?.position.jumpTo(originTop);
+    _cancelHorizontalDrag();
+    if (mounted) setState(() {});
   }
 
   bool _isTextCovered() => _veilHoldsText;
@@ -1513,6 +1748,112 @@ class _ReaderTextViewState extends State<ReaderTextView>
     );
   }
 
+  Widget _buildHorizontalTransition(Widget targetPage) {
+    final snapshot = _dragSnapshot;
+    if (!widget.horizontalPageTurn ||
+        snapshot == null ||
+        _dragDirection == 0) {
+      return targetPage;
+    }
+    final width = math.max(1.0, _viewportSize.width);
+    final t = (_dragOffset.abs() / width).clamp(0.0, 1.0);
+    final dir = _dragDirection; // -1 = next page (drag left), +1 = prev page (drag right)
+    final snapshotWidget = RawImage(image: snapshot, fit: BoxFit.fill);
+
+    switch (widget.horizontalPageTurnStyle) {
+      case ReaderHorizontalPageTurnStyle.slide:
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            Transform.translate(
+              offset: Offset(_dragOffset - dir * width, 0),
+              child: targetPage,
+            ),
+            Transform.translate(
+              offset: Offset(_dragOffset, 0),
+              child: Opacity(opacity: (1 - 0.08 * t).clamp(0.0, 1.0), child: snapshotWidget),
+            ),
+          ],
+        );
+      case ReaderHorizontalPageTurnStyle.cover:
+        if (dir == -1) {
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              Transform.translate(
+                offset: Offset(-0.25 * width * t, 0),
+                child: Opacity(opacity: (1 - 0.15 * t).clamp(0.0, 1.0), child: snapshotWidget),
+              ),
+              Transform.translate(
+                offset: Offset(width + _dragOffset, 0),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.16 * (1 - t)),
+                        blurRadius: 12,
+                        offset: const Offset(-4, 0),
+                      ),
+                    ],
+                  ),
+                  child: targetPage,
+                ),
+              ),
+            ],
+          );
+        }
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            Transform.translate(
+              offset: Offset(-0.25 * width * (1 - t), 0),
+              child: Opacity(opacity: (0.85 + 0.15 * t).clamp(0.0, 1.0), child: targetPage),
+            ),
+            Transform.translate(
+              offset: Offset(_dragOffset, 0),
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.16 * (1 - t)),
+                      blurRadius: 12,
+                      offset: const Offset(-4, 0),
+                    ),
+                  ],
+                ),
+                child: snapshotWidget,
+              ),
+            ),
+          ],
+        );
+      case ReaderHorizontalPageTurnStyle.forward:
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            Transform.translate(
+              offset: Offset(0.25 * _dragOffset, 0),
+              child: Opacity(opacity: (1 - t).clamp(0.0, 1.0), child: snapshotWidget),
+            ),
+            Transform.translate(
+              offset: Offset(-dir * 0.25 * width * (1 - t), 0),
+              child: Opacity(opacity: t.clamp(0.0, 1.0), child: targetPage),
+            ),
+          ],
+        );
+      case ReaderHorizontalPageTurnStyle.glide:
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            snapshotWidget,
+            Transform.translate(
+              offset: Offset(-dir * 48.0 * (1 - t), 0),
+              child: Opacity(opacity: t.clamp(0.0, 1.0), child: targetPage),
+            ),
+          ],
+        );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
@@ -1546,41 +1887,66 @@ class _ReaderTextViewState extends State<ReaderTextView>
               left: textSpec.textPaddingLeft,
               right: textSpec.textPaddingRight,
             ),
-            physics: _physics,
+            physics: widget.horizontalPageTurn ? const NeverScrollableScrollPhysics() : _physics,
             // 跨在上下緣的段落畫到正文區外，閱讀頁框架只露出正文與頁首頁尾
             // 之間那段空隙，並在那裡漸隱（ReaderPageShell）。
             clipBehavior: Clip.none,
           ),
         );
-        final readerStack = Stack(
-          fit: StackFit.expand,
-          clipBehavior: Clip.none,
-          children: <Widget>[
-            visualContent,
-            Positioned.fill(
-              child: ReaderMarkLayers(
-                geometry: _marks,
-                scroll: controller,
-                textLeft: textSpec.textPaddingLeft,
-                highlightColor: widget.highlightColor,
-                highlightStrength: widget.highlightStrength,
-                highlights: widget.highlights,
-                marks: widget.marks,
-                ttsHighlight: widget.ttsHighlight,
-              ),
-            ),
-            // 正文剛排好時，蓋著的紙在上面淡出；等跳章的正文時紙攔下捲動。
-            if (_veil.isVisible)
+        double bottomMaskHeight = 0.0;
+        if (widget.horizontalPageTurn &&
+            controller.hasClients &&
+            _viewportSize.height > 0) {
+          final currentTop = controller.position.pixels;
+          final snappedBottom = _pipeline.geometry.snapPageBottom(
+            currentTop,
+            _viewportSize.height,
+          );
+          bottomMaskHeight = (_viewportSize.height - (snappedBottom - currentTop))
+              .clamp(0.0, _viewportSize.height)
+              .toDouble();
+        }
+        final basePage = RepaintBoundary(
+          key: _pageBoundaryKey,
+          child: Stack(
+            fit: StackFit.expand,
+            clipBehavior: Clip.none,
+            children: <Widget>[
+              visualContent,
               Positioned.fill(
-                child: IgnorePointer(
-                  // 紙蓋著正文（淡入中或已蓋滿）時攔下捲動；淡出中的紙
-                  // 不攔。
-                  ignoring: !_veilHoldsText,
-                  child: _buildVeil(state),
+                child: ReaderMarkLayers(
+                  geometry: _marks,
+                  scroll: controller,
+                  textLeft: textSpec.textPaddingLeft,
+                  highlightColor: widget.highlightColor,
+                  highlightStrength: widget.highlightStrength,
+                  highlights: widget.highlights,
+                  marks: widget.marks,
+                  ttsHighlight: widget.ttsHighlight,
                 ),
               ),
-          ],
+              if (bottomMaskHeight > 0.5)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  height: bottomMaskHeight,
+                  child: ColoredBox(color: widget.backgroundColor),
+                ),
+              // 正文剛排好時，蓋著的紙在上面淡出；等跳章的正文時紙攔下捲動。
+              if (_veil.isVisible)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    // 紙蓋著正文（淡入中或已蓋滿）時攔下捲動；淡出中的紙
+                    // 不攔。
+                    ignoring: !_veilHoldsText,
+                    child: _buildVeil(state),
+                  ),
+                ),
+            ],
+          ),
         );
+        final readerStack = _buildHorizontalTransition(basePage);
         // 長按與捲動在同一個手勢競技場：先拖動就是捲動，按住不動才選字。
         // 選取層在點擊層之外，按把手與選單不會被當成點正文。
         return ColoredBox(
@@ -1614,6 +1980,20 @@ class _ReaderTextViewState extends State<ReaderTextView>
                     : _touch.handleTapUp,
                 suppressTapAtPointerDown: _isUserFlingInProgress,
                 child: GestureDetector(
+                  onHorizontalDragStart:
+                      widget.horizontalPageTurn && !controlsVisible && !_veilHoldsText
+                      ? _onHorizontalDragStart
+                      : null,
+                  onHorizontalDragUpdate:
+                      widget.horizontalPageTurn && !controlsVisible && !_veilHoldsText
+                      ? _onHorizontalDragUpdate
+                      : null,
+                  onHorizontalDragEnd:
+                      widget.horizontalPageTurn && !controlsVisible && !_veilHoldsText
+                      ? _onHorizontalDragEnd
+                      : null,
+                  onHorizontalDragCancel:
+                      widget.horizontalPageTurn ? _onHorizontalDragCancel : null,
                   onLongPressStart:
                       widget.textSelectionEnabled &&
                           !controlsVisible &&
