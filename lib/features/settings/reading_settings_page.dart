@@ -6,6 +6,7 @@ import 'package:night_reader/features/reader/features/settings/reader_settings_c
 import 'package:night_reader/features/reader/features/settings/reader_settings_groups.dart';
 import 'package:night_reader/features/reader/screen/reader_device_channel.dart';
 import 'package:night_reader/shared/widgets/glass/glass.dart';
+import 'package:night_reader/shared/widgets/glass/glass_menu.dart';
 import 'package:night_reader/shared/widgets/lists/grouped_list.dart';
 import 'package:provider/provider.dart';
 
@@ -96,7 +97,7 @@ class _ReadingSettingsPageState extends State<ReadingSettingsPage> {
         selector: (_, settings) => settings.preDownloadNum,
         builder: (rowContext, count, _) => GroupedRow(
           title: '預緩存章節數',
-          value: count == 0 ? '關閉' : '$count 章',
+          value: _preDownloadLabel(count),
           showChevron: false,
           onTap: () => _pickPreDownloadNum(rowContext, count),
         ),
@@ -104,8 +105,14 @@ class _ReadingSettingsPageState extends State<ReadingSettingsPage> {
     ],
   );
 
+  static String _preDownloadLabel(int count) {
+    if (count == 0) return '關閉';
+    if (count < 0) return '全部章節';
+    return '$count 章';
+  }
+
   Future<void> _pickPreDownloadNum(BuildContext rowContext, int selected) async {
-    const options = [0, 1, 3, 5, 10, 20];
+    const options = [0, 1, 3, 5, 10, 50, 100, -1];
     final picked = await showGlassMenu<int>(
       context: rowContext,
       anchor: globalRectOf(rowContext),
@@ -113,7 +120,7 @@ class _ReadingSettingsPageState extends State<ReadingSettingsPage> {
         for (final option in options)
           GlassMenuItem(
             value: option,
-            child: UiText(option == 0 ? '關閉' : '$option 章'),
+            child: UiText(_preDownloadLabel(option)),
           ),
       ],
       selected: selected,
