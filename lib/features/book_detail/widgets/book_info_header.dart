@@ -7,6 +7,8 @@ import 'package:night_reader/shared/theme/app_chrome.dart';
 import 'package:night_reader/shared/theme/app_text_styles.dart';
 import 'package:night_reader/shared/theme/app_tokens.dart';
 import 'package:night_reader/shared/widgets/glass/glass.dart';
+import 'package:night_reader/shared/widgets/skeleton/grouped_list_skeleton.dart';
+import 'package:night_reader/shared/widgets/skeleton/skeleton.dart';
 
 import '../book_detail_provider.dart';
 
