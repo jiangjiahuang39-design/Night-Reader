@@ -92,6 +92,34 @@ class _ReadingSettingsPageState extends State<ReadingSettingsPage> {
           onChanged: context.read<SettingsProvider>().setReplaceEnableDefault,
         ),
       ),
+      Selector<SettingsProvider, int>(
+        selector: (_, settings) => settings.preDownloadNum,
+        builder: (rowContext, count, _) => GroupedRow(
+          title: '預緩存章節數',
+          value: count == 0 ? '關閉' : '$count 章',
+          showChevron: false,
+          onTap: () => _pickPreDownloadNum(rowContext, count),
+        ),
+      ),
     ],
   );
+
+  Future<void> _pickPreDownloadNum(BuildContext rowContext, int selected) async {
+    const options = [0, 1, 3, 5, 10, 20];
+    final picked = await showGlassMenu<int>(
+      context: rowContext,
+      anchor: globalRectOf(rowContext),
+      entries: [
+        for (final option in options)
+          GlassMenuItem(
+            value: option,
+            child: UiText(option == 0 ? '關閉' : '$option 章'),
+          ),
+      ],
+      selected: selected,
+    );
+    if (picked != null && mounted) {
+      context.read<SettingsProvider>().setPreDownloadNum(picked);
+    }
+  }
 }
