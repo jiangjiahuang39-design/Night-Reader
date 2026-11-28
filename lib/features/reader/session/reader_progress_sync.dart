@@ -38,7 +38,7 @@ class ReaderProgressSync {
 
   /// 換頁動畫播完時雲端進度還沒抓到，最多再等這麼久（期間畫面停在骨架）；
   /// 再晚就照這台的位置開。
-  static const Duration openGrace = Duration(milliseconds: 500);
+  static const Duration openGrace = Duration(milliseconds: 50);
 
   final Book book;
   final ReaderRuntime? Function() _runtime;
