@@ -503,7 +503,7 @@ class _BookshelfPageState extends State<BookshelfPage>
           empty &&
               (provider.isLoading || _hasSources == null && !_contentShown) ||
           !_contentShown && !ChineseDisplay.readyOf(context),
-      waitForCovers: CoverWait.onDevice,
+      waitForCovers: null,
       entrance: LaunchEntrance.maybeOf(context),
       // 書架直接畫在頁面底色上：換場只遮骨架一層（ADR 0029）。
       backdrop: Theme.of(context).scaffoldBackgroundColor,
