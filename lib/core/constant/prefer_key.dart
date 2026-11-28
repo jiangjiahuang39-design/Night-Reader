@@ -276,6 +276,11 @@ class PreferKey {
 
   /// 翻頁捲動的快慢（`ReaderPageTurnSpeed.name`）。
   static const String readerPageTurnSpeed = 'reader_page_turn_speed';
+
+  /// 横向翻頁開關與動效（平移 / 覆蓋 / 推進 / 滑入）。
+  static const String readerHorizontalPageTurn = 'reader_horizontal_page_turn';
+  static const String readerHorizontalPageTurnStyle =
+      'reader_horizontal_page_turn_style';
   static const String readerUse24HourClock = 'reader_use_24_hour_clock';
 
   /// 全書進度顯示到小數第幾位。
