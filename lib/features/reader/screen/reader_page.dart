@@ -598,8 +598,13 @@ class _ReaderPageState extends State<ReaderPage>
               skeletonPages: _host.dependencies.skeletonPages,
               pageTurnOverlap: _host.settings.pageTurnOverlap,
               pageTurnDuration: _host.settings.pageTurnSpeed.duration,
-              horizontalPageTurn: _host.settings.horizontalPageTurn,
-              horizontalPageTurnStyle: _host.settings.horizontalPageTurnStyle,
+              horizontalPageTurn: context.watch<ThemeSettingsProvider>().horizontalPageTurn,
+              horizontalPageTurnStyle: switch (context.watch<ThemeSettingsProvider>().effectiveHorizontalTransition) {
+                AppPageTransition.cover => ReaderHorizontalPageTurnStyle.cover,
+                AppPageTransition.forward => ReaderHorizontalPageTurnStyle.forward,
+                AppPageTransition.glide => ReaderHorizontalPageTurnStyle.glide,
+                _ => ReaderHorizontalPageTurnStyle.slide,
+              },
             ),
             if (runtime.state.lifecycle == ReaderLifecycle.unavailable)
               Align(
