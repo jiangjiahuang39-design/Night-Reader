@@ -609,11 +609,14 @@ class _ReaderTextViewState extends State<ReaderTextView>
       _setTextLaidOut(false);
       // 只有開書時位置、版面與正文都和紀錄相同才照紀錄畫；其他還原（包括
       // 取代了還沒排完的開書或另一個還原）一律重新等自己的第一頁。
+      final isOpen = operationKind == ReaderOperationKind.open;
       final opening = _openingPage;
       final keepsOpeningPage =
-          opening != null &&
-          opening.contentHash == blocks.contentHash &&
-          opening.layout == ReaderSkeletonPage.layoutKeyOf(pipeline.layoutSpec);
+          isOpen ||
+          (opening != null &&
+              opening.contentHash == blocks.contentHash &&
+              opening.layout ==
+                  ReaderSkeletonPage.layoutKeyOf(pipeline.layoutSpec));
       if (!keepsOpeningPage) _coverUntilFirstPage();
       _setRestoreBudget(isCurrent, PumpState.loading);
       _scheduleRebuild();
@@ -626,7 +629,7 @@ class _ReaderTextViewState extends State<ReaderTextView>
         final target = await _layOutAround(
           anchor,
           blocks,
-          withLead: operationOwnsReadyWorld,
+          withLead: operationOwnsReadyWorld && !isOpen,
           isCurrent: isCurrent,
         );
         if (!isCurrent()) return false;
