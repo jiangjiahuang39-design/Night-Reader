@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 import 'package:night_reader/core/chinese/chinese_utils.dart';
 import 'package:night_reader/core/chinese/chinese_display.dart';
@@ -126,7 +128,11 @@ abstract final class UiLanguageText {
       text == null ? null : convert(context, text);
 
   static String toSimplified(String text) {
-    if (text.isEmpty || !ChineseUtils.isInitialized) return text;
+    if (text.isEmpty) return text;
+    if (!ChineseUtils.isInitialized) {
+      unawaited(ChineseDisplay.ensureLoaded());
+      return text;
+    }
     final cached = _simplified.remove(text);
     if (cached != null) return _simplified[text] = cached;
     final converted = ChineseUtils.t2s(text);
