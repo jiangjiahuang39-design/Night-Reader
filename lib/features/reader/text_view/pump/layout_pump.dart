@@ -199,7 +199,7 @@ final class LayoutPump {
         final work = _queue.reduce((a, b) => a.priority <= b.priority ? a : b);
         final predicted = work is _LayoutWork
             ? _costModel.predict(work.task).inMicroseconds
-            : _governor.ballisticSliceBudget.inMicroseconds;
+            : 300;
         if (_spentThisFrame > 0 && _spentThisFrame + predicted > budget) break;
         _queue.remove(work);
         final sliceStart = debugOnSlice == null ? 0 : Timeline.now;
@@ -232,9 +232,53 @@ final class LayoutPump {
 
   void _layoutTask(LayoutTask task) {
     final started = Stopwatch()..start();
-    final paragraph = _buildParagraph(task);
-    final groupBlocks = task.groupBlocks;
-    if (task.readerOwnedLinePlan) {
+    var effectiveTask = task;
+    if (task.readerOwnedLinePlan &&
+        task.groupBlocks.length == 1 &&
+        task.block.text.isNotEmpty &&
+        !task.block.hasVisualLinePlan) {
+      final block = task.block;
+      final plan = _lineLayoutEngine.planBlock(
+        text: block.text,
+        start: 0,
+        maxBlockChars: block.text.length,
+        textStyle: task.textStyle,
+        contentWidth: task.contentWidth,
+        cellWidth: task.cellWidth,
+        indentChars: task.indentChars,
+      );
+      final planned = ChapterBlock(
+        key: block.key,
+        text: block.text,
+        charRange: block.charRange,
+        sourceParagraphIndex: block.sourceParagraphIndex,
+        isTitle: block.isTitle,
+        isContinuation: block.isContinuation,
+        layoutBreakBefore: block.layoutBreakBefore,
+        visualLineBreakOffsets: plan.visualLineBreakOffsets,
+        visualLineSpacers: plan.spacers,
+        hasVisualLinePlan: true,
+        illustration: block.illustration,
+      );
+      effectiveTask = LayoutTask(
+        block: planned,
+        continuationBlocks: task.continuationBlocks,
+        epoch: task.epoch,
+        fingerprint: task.fingerprint,
+        textStyle: task.textStyle,
+        contentWidth: task.contentWidth,
+        cellWidth: task.cellWidth,
+        textColor: task.textColor,
+        priority: task.priority,
+        indentChars: task.indentChars,
+        trailingSpacing: task.trailingSpacing,
+        trailingLayoutLookahead: task.trailingLayoutLookahead,
+        readerOwnedLinePlan: true,
+      );
+    }
+    final paragraph = _buildParagraph(effectiveTask);
+    final groupBlocks = effectiveTask.groupBlocks;
+    if (effectiveTask.readerOwnedLinePlan) {
       if (groupBlocks.length != 1) {
         paragraph.dispose();
         throw StateError(
@@ -252,24 +296,24 @@ final class LayoutPump {
         );
       }
     }
-    final splitYs = _groupSplitYs(task, paragraph);
-    final metricsList = _metricsFromSplitYs(task, paragraph, splitYs);
+    final splitYs = _groupSplitYs(effectiveTask, paragraph);
+    final metricsList = _metricsFromSplitYs(effectiveTask, paragraph, splitYs);
     final keys = <BlockKey>[for (final block in groupBlocks) block.key];
     _paragraphCache.putGroup(
       keys,
       splitYs.sublist(0, groupBlocks.length),
-      task.epoch,
+      effectiveTask.epoch,
       paragraph,
-      bakedColor: task.textColor,
+      bakedColor: effectiveTask.textColor,
     );
     for (var i = 0; i < keys.length; i += 1) {
       _measurementStore.put(_namespace, keys[i], metricsList[i]);
     }
     final elapsed = started.elapsed;
-    _costModel.record(charCount: task.layoutText.length, elapsed: elapsed);
+    _costModel.record(charCount: effectiveTask.layoutText.length, elapsed: elapsed);
     for (var i = 0; i < keys.length; i += 1) {
       _completed.add(
-        BlockReady(key: keys[i], epoch: task.epoch, metrics: metricsList[i]),
+        BlockReady(key: keys[i], epoch: effectiveTask.epoch, metrics: metricsList[i]),
       );
     }
   }
