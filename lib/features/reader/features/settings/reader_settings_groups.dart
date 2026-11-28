@@ -484,30 +484,63 @@ class ReaderSettingsGroups {
 
   // ---------- 翻頁 ----------
 
-  /// 點擊、音量鍵與選單翻頁：上一屏留幾行在畫面上、捲過一屏的快慢。
+  /// 點擊、音量鍵與選單翻頁：橫向翻頁開關、動效、保留行數與翻頁快慢。
   GroupedSection pageTurn() => GroupedSection(
     margin: margin,
     children: [
-      _StepperRow(
-        _Watch<int>(
-          listenable: settings,
-          select: () => settings.pageTurnOverlap,
-          builder: (context, overlap) => NumberStepperRow(
-            label: '保留行數',
-            value: overlap.toDouble(),
-            min: ReaderPrefsRepository.minPageTurnOverlap.toDouble(),
-            max: ReaderPrefsRepository.maxPageTurnOverlap.toDouble(),
-            step: 1,
-            unit: '行',
-            onChanged: (value) => settings.setPageTurnOverlap(value.round()),
-          ),
+      _Watch<bool>(
+        listenable: settings,
+        select: () => settings.horizontalPageTurn,
+        builder: (context, horizontal) => Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            GroupedSwitchRow(
+              title: '橫向翻頁',
+              value: horizontal,
+              onChanged: settings.setHorizontalPageTurn,
+            ),
+            if (horizontal)
+              _Watch<ReaderHorizontalPageTurnStyle>(
+                listenable: settings,
+                select: () => settings.horizontalPageTurnStyle,
+                builder: (context, style) => GroupedLabeledRow(
+                  label: '翻頁效果',
+                  child: GlassSegmented<ReaderHorizontalPageTurnStyle>(
+                    expand: false,
+                    segments: [
+                      for (final option in ReaderHorizontalPageTurnStyle.values)
+                        GlassSegment(option, option.label),
+                    ],
+                    selected: style,
+                    onChanged: settings.setHorizontalPageTurnStyle,
+                  ),
+                ),
+              )
+            else
+              _StepperRow(
+                _Watch<int>(
+                  listenable: settings,
+                  select: () => settings.pageTurnOverlap,
+                  builder: (context, overlap) => NumberStepperRow(
+                    label: '保留行數',
+                    value: overlap.toDouble(),
+                    min: ReaderPrefsRepository.minPageTurnOverlap.toDouble(),
+                    max: ReaderPrefsRepository.maxPageTurnOverlap.toDouble(),
+                    step: 1,
+                    unit: '行',
+                    onChanged: (value) =>
+                        settings.setPageTurnOverlap(value.round()),
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
       _Watch<ReaderPageTurnSpeed>(
         listenable: settings,
         select: () => settings.pageTurnSpeed,
         builder: (context, speed) => GroupedLabeledRow(
-          label: '捲動速度',
+          label: '翻頁速度',
           child: GlassSegmented<ReaderPageTurnSpeed>(
             expand: false,
             segments: [
