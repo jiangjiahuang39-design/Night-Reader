@@ -120,10 +120,10 @@ class _ReadingSettingsPageState extends State<ReadingSettingsPage> {
         for (final option in options)
           GlassMenuItem(
             value: option,
-            child: UiText(_preDownloadLabel(option)),
+            label: _preDownloadLabel(option),
+            checked: option == selected,
           ),
       ],
-      selected: selected,
     );
     if (picked != null && mounted) {
       context.read<SettingsProvider>().setPreDownloadNum(picked);
