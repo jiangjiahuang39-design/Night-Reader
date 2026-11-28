@@ -31,6 +31,7 @@ class SettingsProvider extends SettingsProviderBase {
 
   // --- 閱讀設定 ---
   bool hideStatusBar = false;
+  int preDownloadNum = 3;
 
   // --- 朗讀設定 ---
   bool ignoreAudioFocusAloud = false;
@@ -87,6 +88,12 @@ class SettingsProvider extends SettingsProviderBase {
     update();
   }
 
+  void setPreDownloadNum(int v) {
+    preDownloadNum = v;
+    save(PreferKey.preDownloadNum, v);
+    update();
+  }
+
   SettingsProvider() {
     _loadFromPrefs(getIt<SharedPreferences>());
     unawaited(_migrateLegacySettings());
@@ -133,6 +140,7 @@ class SettingsProvider extends SettingsProviderBase {
 
     // --- 閱讀設定 ---
     hideStatusBar = prefs.getBool(PreferKey.hideStatusBar) ?? false;
+    preDownloadNum = prefs.getInt(PreferKey.preDownloadNum) ?? 3;
     autoRefresh = prefs.getBool(PreferKey.autoRefresh) ?? true;
     AppConfig.autoRefresh = autoRefresh;
     defaultToRead = prefs.getBool(PreferKey.defaultToRead) ?? false;
