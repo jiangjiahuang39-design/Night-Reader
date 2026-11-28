@@ -293,18 +293,9 @@ class _ReaderTextViewState extends State<ReaderTextView>
     _windowCenter = widget.runtime.state.visibleLocation.chapterIndex;
     _registerRuntime();
     _attachController();
-    _openingPage = _rememberedPageForOpening();
-    if (_openingPage case final page?) {
-      _veilPage = (
-        lines: page.lines,
-        titleLines: page.titleLines,
-        blockLines: page.blockLines,
-        spec: widget.runtime.state.layoutSpec,
-      );
-      _veil.cover();
-    } else {
-      _coverUntilFirstPage();
-    }
+    _openingPage = null;
+    _veilPage = null;
+    _coverUntilFirstPage();
     _lifecycle = AppLifecycleListener(onHide: _rememberPage);
     widget.controlsVisible?.addListener(_onControlsVisibleChanged);
     WidgetsBinding.instance.addTimingsCallback(_handleFrameTimings);
@@ -572,8 +563,10 @@ class _ReaderTextViewState extends State<ReaderTextView>
   }) async {
     // 舊正文還在畫面上（例如朗讀念到還沒載入的一章）：紙先淡入蓋住，蓋滿
     // 才開始排版（ADR 0018）。
-    _coverText();
-    if (!await _awaitCovered() || !isCurrent()) return false;
+    if (operationKind != ReaderOperationKind.jump) {
+      _coverText();
+      if (!await _awaitCovered() || !isCurrent()) return false;
+    }
     // 開書、跳章與重新定位都是使用者的動作：之前取不到的章節都再試一次。
     _chapterRepo.forgetFailures();
     final pipeline = _pipeline;
@@ -609,10 +602,12 @@ class _ReaderTextViewState extends State<ReaderTextView>
       _setTextLaidOut(false);
       // 只有開書時位置、版面與正文都和紀錄相同才照紀錄畫；其他還原（包括
       // 取代了還沒排完的開書或另一個還原）一律重新等自己的第一頁。
-      final isOpen = operationKind == ReaderOperationKind.open;
+      final isOpenOrJump =
+          operationKind == ReaderOperationKind.open ||
+          operationKind == ReaderOperationKind.jump;
       final opening = _openingPage;
       final keepsOpeningPage =
-          isOpen ||
+          isOpenOrJump ||
           (opening != null &&
               opening.contentHash == blocks.contentHash &&
               opening.layout ==
@@ -629,7 +624,7 @@ class _ReaderTextViewState extends State<ReaderTextView>
         final target = await _layOutAround(
           anchor,
           blocks,
-          withLead: operationOwnsReadyWorld && !isOpen,
+          withLead: operationOwnsReadyWorld && !isOpenOrJump,
           isCurrent: isCurrent,
         );
         if (!isCurrent()) return false;
