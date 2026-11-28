@@ -577,7 +577,7 @@ class ReaderRuntime extends ChangeNotifier {
     if (disposed || book.isLocal || repository.chapterCount <= 0) return;
     if (!getIt.isRegistered<SharedPreferences>()) return;
     final count = getIt<SharedPreferences>().getInt(PreferKey.preDownloadNum) ?? 3;
-    if (count <= 0) return;
+    if (count == 0) return;
     if (_lastPreloadAnchor == chapterIndex) return;
     _lastPreloadAnchor = chapterIndex;
     final generation = ++_preloadGeneration;
@@ -585,10 +585,12 @@ class ReaderRuntime extends ChangeNotifier {
   }
 
   Future<void> _runPreload(int fromChapter, int count, int generation) async {
-    for (var offset = 1; offset <= count; offset++) {
+    final total = repository.chapterCount;
+    final limit = count < 0 ? total - 1 - fromChapter : count;
+    for (var offset = 1; offset <= limit; offset++) {
       if (disposed || generation != _preloadGeneration) return;
       final target = fromChapter + offset;
-      if (target >= repository.chapterCount) return;
+      if (target >= total) return;
       if (repository.cachedContent(target) != null) continue;
       try {
         await repository.preloadContent(target);
