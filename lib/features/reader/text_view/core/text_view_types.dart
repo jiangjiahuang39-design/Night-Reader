@@ -340,6 +340,7 @@ final class ChapterBlock {
     this.layoutBreakBefore = false,
     this.visualLineBreakOffsets = const <int>[],
     this.visualLineSpacers = const <LineSpacer>[],
+    this.hasVisualLinePlan = false,
     this.illustration,
   }) : assert(illustration == null || text == '');
 
@@ -371,6 +372,9 @@ final class ChapterBlock {
 
   /// 視覺行內的補白（見 [LineSpacer]），offset 相對於本塊文字，遞增排列。
   final List<LineSpacer> visualLineSpacers;
+
+  /// 是否已經算好這個塊的視覺換行與補白。
+  final bool hasVisualLinePlan;
 
   int get chapterIndex => key.chapterIndex;
   int get blockIndex => key.blockIndex;
