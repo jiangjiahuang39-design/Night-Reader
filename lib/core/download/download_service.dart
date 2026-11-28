@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:shared_preferences/shared_preferences.dart';
+
 import 'package:night_reader/core/database/app_database.dart';
 import 'package:night_reader/core/database/dao/book_dao.dart';
 import 'package:night_reader/core/database/dao/book_source_dao.dart';
@@ -322,6 +324,10 @@ class DownloadService extends DownloadBase
     String bookUrl, {
     bool hasNewChapters = false,
   }) async {
+    if (getIt.isRegistered<SharedPreferences>() &&
+        !(getIt<SharedPreferences>().getBool('autoDownloadShelf') ?? false)) {
+      return;
+    }
     try {
       await _initialization;
       final need = await _shelfDownloadNeedInSourceIsolate(bookUrl);
