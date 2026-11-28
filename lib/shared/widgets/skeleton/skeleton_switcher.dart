@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import 'cover_reveal.dart';
@@ -64,10 +65,11 @@ class _SkeletonSwitcherState extends State<SkeletonSwitcher>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller = AnimationController(
     vsync: this,
-    value: widget.loading || _entering ? 0 : 1,
+    value: widget.loading ? 0 : 1,
   )..addStatusListener(_onStatus);
 
   /// 內容出現的進度（經過的時間比例，曲線由 [SkeletonReveal] 套）。
+  late final CurvedAnimation _fade = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
   late final Animation<double> _content = _controller;
   late final Animation<double> _skeleton = ReverseAnimation(_content);
 
@@ -146,7 +148,15 @@ class _SkeletonSwitcherState extends State<SkeletonSwitcher>
   }
 
   void _onLoaded({bool duringBuild = false}) {
-    _controller.value = 1;
+    _controller.duration = const Duration(milliseconds: 150);
+    if (duringBuild) {
+      _controller.value = 0;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && !widget.loading) unawaited(_controller.forward());
+      });
+    } else {
+      unawaited(_controller.forward(from: 0));
+    }
     widget.entrance?.revealNow();
     widget.onRevealed?.call();
   }
@@ -155,7 +165,7 @@ class _SkeletonSwitcherState extends State<SkeletonSwitcher>
     _incoming = incoming;
     _sweep = false;
     _controller
-      ..duration = Duration.zero
+      ..duration = const Duration(milliseconds: 150)
       ..reverseDuration = Duration.zero;
   }
 
@@ -164,6 +174,7 @@ class _SkeletonSwitcherState extends State<SkeletonSwitcher>
     widget.entrance?.skeleton.removeStatusListener(_onEntranceStatus);
     _snapshotting?.finish();
     widget.entrance?.donePreparing();
+    _fade.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -172,15 +183,63 @@ class _SkeletonSwitcherState extends State<SkeletonSwitcher>
   Widget build(BuildContext context) {
     if (widget.loading) {
       final backdrop = widget.backdrop;
-      return backdrop == null
-          ? const SizedBox.shrink()
-          : ColoredBox(color: backdrop, child: const SizedBox.expand());
+      const indicator = _DelayedLoadingIndicator();
+      if (backdrop == null) {
+        return indicator;
+      }
+      return ColoredBox(
+        color: backdrop,
+        child: widget.fit == StackFit.expand
+            ? const SizedBox.expand(child: indicator)
+            : indicator,
+      );
     }
     if (!identical(_contentFor, widget)) {
       _contentFor = widget;
       _contentReveal = null;
       _lastContent = Builder(builder: widget.builder);
     }
-    return _lastContent!;
+    return FadeTransition(
+      opacity: _fade,
+      child: _lastContent!,
+    );
+  }
+}
+
+class _DelayedLoadingIndicator extends StatefulWidget {
+  const _DelayedLoadingIndicator();
+
+  @override
+  State<_DelayedLoadingIndicator> createState() =>
+      _DelayedLoadingIndicatorState();
+}
+
+class _DelayedLoadingIndicatorState extends State<_DelayedLoadingIndicator> {
+  Timer? _timer;
+  bool _visible = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer(const Duration(milliseconds: 150), () {
+      if (mounted) setState(() => _visible = true);
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_visible) return const SizedBox.shrink();
+    return const Center(
+      child: Padding(
+        padding: EdgeInsets.all(16),
+        child: CupertinoActivityIndicator(),
+      ),
+    );
   }
 }
