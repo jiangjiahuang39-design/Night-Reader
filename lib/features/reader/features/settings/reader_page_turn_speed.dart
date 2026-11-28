@@ -17,3 +17,23 @@ enum ReaderPageTurnSpeed {
     orElse: () => defaultSpeed,
   );
 }
+
+
+/// 橫向翻頁的動效（僅包含適合橫向跟手的樣式）。
+enum ReaderHorizontalPageTurnStyle {
+  slide('平移'),
+  cover('覆蓋'),
+  forward('推進'),
+  glide('滑入');
+
+  const ReaderHorizontalPageTurnStyle(this.label);
+
+  final String label;
+
+  static const ReaderHorizontalPageTurnStyle defaultStyle = slide;
+
+  static ReaderHorizontalPageTurnStyle parse(String? name) => values.firstWhere(
+    (style) => style.name == name,
+    orElse: () => defaultStyle,
+  );
+}
