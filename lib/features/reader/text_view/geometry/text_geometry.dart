@@ -575,7 +575,6 @@ final class TextGeometry {
     final keys = _documentIndex
         .keysInRange(top, bottom)
         .toList(growable: false);
-    final epoch = _layoutEpoch();
     for (var i = keys.length - 1; i >= 0; i--) {
       final key = keys[i];
       final blockTop = _documentIndex.topOf(key);
@@ -594,12 +593,14 @@ final class TextGeometry {
           continue;
         }
       }
-      final paragraph = _paragraphCache.get(key, epoch)?.paragraph;
-      if (paragraph == null) continue;
+      final entry = _paragraphCache.acquireEntry(key, _epoch);
+      if (entry == null) continue;
+      final paragraph = entry.paragraph;
       for (var ln = paragraph.numberOfLines - 1; ln >= 0; ln--) {
         final line = paragraph.getLineMetricsAt(ln);
         if (line == null) continue;
-        final lineBottom = blockTop + (line.baseline - line.ascent) + line.height;
+        final lineBottom =
+            blockTop - entry.localTop + (line.baseline - line.ascent) + line.height;
         if (lineBottom <= bottom + 0.5 && lineBottom > top + 0.5) {
           return lineBottom;
         }
@@ -614,7 +615,6 @@ final class TextGeometry {
     final keys = _documentIndex
         .keysInRange(targetTop, bottom)
         .toList(growable: false);
-    final epoch = _layoutEpoch();
     for (final key in keys) {
       final blockTop = _documentIndex.topOf(key);
       if (blockTop == null) continue;
@@ -627,12 +627,14 @@ final class TextGeometry {
           continue;
         }
       }
-      final paragraph = _paragraphCache.get(key, epoch)?.paragraph;
-      if (paragraph == null) continue;
+      final entry = _paragraphCache.acquireEntry(key, _epoch);
+      if (entry == null) continue;
+      final paragraph = entry.paragraph;
       for (var ln = 0; ln < paragraph.numberOfLines; ln++) {
         final line = paragraph.getLineMetricsAt(ln);
         if (line == null) continue;
-        final lineTop = blockTop + (line.baseline - line.ascent);
+        final lineTop =
+            blockTop - entry.localTop + (line.baseline - line.ascent);
         if (lineTop >= targetTop - 0.5 && lineTop < bottom - 0.5) {
           return lineTop;
         }
