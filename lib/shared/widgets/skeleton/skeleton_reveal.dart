@@ -25,7 +25,7 @@ enum SkeletonRevealStyle {
 @immutable
 class SkeletonReveal extends ThemeExtension<SkeletonReveal> {
   const SkeletonReveal({
-    this.style = SkeletonRevealStyle.sweep,
+    this.style = SkeletonRevealStyle.fade,
     this.duration = defaultDuration,
   });
 
@@ -33,7 +33,7 @@ class SkeletonReveal extends ThemeExtension<SkeletonReveal> {
   final Duration duration;
 
   /// 使用者定的時長（2026-10-17），App 固定用它（ADR 0024）。
-  static const Duration defaultDuration = Duration.zero;
+  static const Duration defaultDuration = Duration(milliseconds: 150);
 
   static SkeletonReveal of(BuildContext context) =>
       Theme.of(context).extension<SkeletonReveal>() ?? const SkeletonReveal();
