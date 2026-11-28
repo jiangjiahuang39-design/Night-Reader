@@ -2,7 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/widgets.dart';
+import 'package:night_reader/core/constant/prefer_key.dart';
+import 'package:night_reader/core/di/injection.dart';
 import 'package:night_reader/core/models/book/book.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:night_reader/core/models/book/chapter_alignment.dart';
 import 'package:night_reader/core/models/book/book_chapter.dart';
 import 'package:night_reader/core/diagnostics/app_log_service.dart';
@@ -451,7 +454,12 @@ class ReaderRuntime extends ChangeNotifier {
     return !disposed && stateMachine.isCurrent(token);
   }
 
+  int _preloadGeneration = 0;
+  int? _lastPreloadAnchor;
+
   ReaderOperationToken beginJumpOperation({ReaderLocation? location}) {
+    _preloadGeneration++;
+    _lastPreloadAnchor = null;
     if (!_openStarted && location != null) _jumpedBeforeOpen = location;
     final token = stateMachine.beginJump(location: location);
     notifyListeners();
@@ -473,7 +481,10 @@ class ReaderRuntime extends ChangeNotifier {
       token,
       visibleLocation: visibleLocation,
     );
-    if (completed) notifyListeners();
+    if (completed) {
+      notifyListeners();
+      _schedulePreload(state.visibleLocation.chapterIndex);
+    }
     return completed;
   }
 
@@ -559,6 +570,32 @@ class ReaderRuntime extends ChangeNotifier {
   void updateVisibleLocation(ReaderLocation location) {
     if (disposed) return;
     stateMachine.updateVisibleLocation(location);
+    _schedulePreload(location.chapterIndex);
+  }
+
+  void _schedulePreload(int chapterIndex) {
+    if (disposed || book.isLocal || repository.chapterCount <= 0) return;
+    if (!getIt.isRegistered<SharedPreferences>()) return;
+    final count = getIt<SharedPreferences>().getInt(PreferKey.preDownloadNum) ?? 3;
+    if (count <= 0) return;
+    if (_lastPreloadAnchor == chapterIndex) return;
+    _lastPreloadAnchor = chapterIndex;
+    final generation = ++_preloadGeneration;
+    unawaited(_runPreload(chapterIndex, count, generation));
+  }
+
+  Future<void> _runPreload(int fromChapter, int count, int generation) async {
+    for (var offset = 1; offset <= count; offset++) {
+      if (disposed || generation != _preloadGeneration) return;
+      final target = fromChapter + offset;
+      if (target >= repository.chapterCount) return;
+      if (repository.cachedContent(target) != null) continue;
+      try {
+        await repository.preloadContent(target);
+      } catch (_) {
+        // 預緩存失敗不影響當前閱讀
+      }
+    }
   }
 
   void commitProgressLocation(ReaderLocation location) {
@@ -796,6 +833,7 @@ class ReaderRuntime extends ChangeNotifier {
   @override
   void dispose() {
     disposed = true;
+    _preloadGeneration++;
     if (!_openFinished.isCompleted) _openFinished.complete();
     repository.dispose();
     progressController.dispose();
